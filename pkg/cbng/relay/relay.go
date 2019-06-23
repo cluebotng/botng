@@ -1,0 +1,280 @@
+package relay
+
+import (
+	"bufio"
+	"crypto/tls"
+	"fmt"
+	"github.com/cluebotng/botng/pkg/cbng/config"
+	"github.com/cluebotng/botng/pkg/cbng/metrics"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
+	"net"
+	"strings"
+	"sync"
+)
+
+type Relays struct {
+	revert *IrcServer
+	spam *IrcServer
+	debug *IrcServer
+}
+
+type IrcServer struct {
+	host            string
+	nick            string
+	password        string
+	port            int
+	channel         string
+	connection      net.Conn
+	scanner         *bufio.Scanner
+	sendChan        chan string
+	reConnectSignal chan bool
+	limiter         *rate.Limiter
+}
+
+func (f *IrcServer) connect() {
+	logger := logrus.WithFields(logrus.Fields{
+		"function": "relay.IrcServer.connect",
+		"args": map[string]interface{}{
+			"nick": f.nick,
+		},
+	})
+
+	if f.connection == nil {
+		logger.Info("Connecting to IRC server")
+		conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", f.host, f.port), &tls.Config{})
+		if err != nil {
+			logger.Warnf("IRC error: %v\n", err)
+			f.close()
+			return
+		}
+		f.connection = conn
+		f.scanner = bufio.NewScanner(f.connection)
+		f.send(fmt.Sprintf("USER %s \"1\" \"1\" :ClueBot Wikipedia Bot 3.0.", strings.ReplaceAll(f.nick, " ", "_")))
+		f.send(fmt.Sprintf("NICK %s", strings.ReplaceAll(f.nick, " ", "_")))
+	}
+}
+
+func (f *IrcServer) close() {
+	logger := logrus.WithFields(logrus.Fields{
+		"function": "relay.IrcServer.close",
+		"args": map[string]interface{}{
+			"nick": f.nick,
+		},
+	})
+
+	logger.Warnf("Closing connection to IRC server")
+	if f.connection != nil {
+		f.connection.Close()
+	}
+	f.connection = nil
+}
+
+func (f *IrcServer) send(message string) bool {
+	isPrivate := strings.Contains(strings.ToUpper(message), "PRIVMSG NICKSERV")
+	loggerMessage := message
+	if isPrivate {
+		loggerMessage = "**secret**"
+	}
+
+	logger := logrus.WithFields(logrus.Fields{
+		"function": "relay.IrcServer.send",
+		"args": map[string]interface{}{
+			"nick": f.nick,
+			"message": loggerMessage,
+		},
+	})
+
+	if f.connection == nil {
+		logger.Warnf("Failed to write due to no connection: %+v", message)
+		return false
+	}
+
+	// Don't log passwords
+	if isPrivate {
+		logger.Debugf("Sending to IRC: **secret**")
+	} else {
+		logger.Debugf("Sending to IRC: %+v", message)
+	}
+	if _, err := fmt.Fprintf(f.connection, "%s\n", message); err != nil {
+		return false
+	}
+	return true
+}
+
+func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, password string, channels config.IrcRelayChannelConfiguration) *Relays {
+	servers := map[string]*IrcServer {}
+	if enableIrc {
+		for _, relayType := range []string{"debug", "revert", "spam"} {
+			var channel string
+			if relayType == "debug" {
+				channel = channels.Debug
+			} else if relayType == "revert" {
+				channel = channels.Revert
+			} else if relayType == "spam" {
+				channel = channels.Spam
+			} else {
+				logrus.Panicf("Unknown relay type: %+v", relayType)
+			}
+
+			f := IrcServer{
+				host:            host,
+				port:            port,
+				nick:            fmt.Sprintf("%v_%v", nick, relayType),
+				password:        password,
+				sendChan:        make(chan string, 10000),
+				reConnectSignal: make(chan bool, 1),
+				limiter:         rate.NewLimiter(6, 6),
+				channel:         channel,
+			}
+			go f.reader(wg)
+			f.connect()
+			go f.reconnector(wg)
+			servers[relayType] = &f
+		}
+	}
+
+	r := Relays{
+		spam: servers["spam"],
+		revert: servers["revert"],
+		debug: servers["debug"],
+	}
+	return &r
+}
+
+func (r *Relays) SendDebug(message string) {
+	metrics.IrcSentDebug.Inc()
+	if r.debug != nil {
+		r.debug.sendChan <- message
+	}
+}
+
+func (r *Relays) SendRevert(message string) {
+	metrics.IrcSentRevert.Inc()
+	if r.revert != nil {
+		r.revert.sendChan <- message
+	}
+}
+
+func (r *Relays) SendSpam(message string) {
+	metrics.IrcSentSpam.Inc()
+	if r.spam != nil {
+		r.spam.sendChan <- message
+	}
+}
+
+func (f *IrcServer) reader(wg *sync.WaitGroup) {
+	logger := logrus.WithFields(logrus.Fields{
+		"function": "relay.IrcServer.reader",
+		"args": map[string]interface{}{
+			"nick": f.nick,
+		},
+	})
+
+	wg.Add(1)
+	defer wg.Done()
+
+	nickCount := 0
+	for {
+		if f.connection == nil {
+			select {
+			case f.reConnectSignal <- true:
+			}
+			if f.connection == nil {
+				continue
+			}
+		}
+
+		f.scanner.Scan()
+		line := f.scanner.Text()
+		lparts := strings.Split(line, " ")
+		llogger := logger.WithFields(logrus.Fields{
+			"line":       line,
+			"line_parts": lparts,
+		})
+		llogger.Trace("Parsing line")
+
+		switch {
+		case lparts[0] == "ERROR":
+			llogger.Warnf("Received error: %v", line)
+			f.close()
+		case lparts[0] == "PING":
+			f.send(fmt.Sprintf("PING %s", strings.TrimLeft(lparts[1], ":")))
+		case len(lparts) >= 2 && (lparts[1] == "376" || lparts[1] == "422"):
+			if f.password != "" {
+				f.send(fmt.Sprintf("PRIVMSG NickServ :IDENTIFY %s %s", strings.ReplaceAll(f.nick, " ", "_"), f.password))
+			}
+			f.send(fmt.Sprintf("JOIN #%s", f.channel))
+			go f.writer(wg)
+		case len(lparts) >= 2 && lparts[1] == "433":
+			llogger.Warnf("Nick already in use")
+			nickCount += 1
+			f.send(fmt.Sprintf("NICK %s_%d\n", strings.ReplaceAll(f.nick, " ", "_"), nickCount))
+		default:
+			llogger.Tracef("Unsupported IRC event: %+v", lparts)
+		}
+	}
+}
+
+func (f *IrcServer) writer(wg *sync.WaitGroup) {
+	logger := logrus.WithFields(logrus.Fields{
+		"function": "relay.IrcServer.writer",
+		"args": map[string]interface{}{
+			"nick": f.nick,
+		},
+	})
+
+	wg.Add(1)
+	defer wg.Done()
+	logger.Info("Started IRC writer")
+	for {
+		// We will spawn a new writer on every connection
+		if f.connection == nil {
+			logger.Warn("Stopping writing due to no connection")
+			break
+		}
+		if f.limiter.Allow() {
+			message := <-f.sendChan
+			logger.Infof("Sending: %+v\n", message)
+			if !f.send(fmt.Sprintf("PRIVMSG #%s :%s", f.channel, message)) {
+				logger.Warn("IRC write error")
+				break
+			}
+		} else {
+			logger.Infof("Not permitted to write")
+		}
+	}
+	f.close()
+}
+
+func (f *IrcServer) reconnector(wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+	for {
+		select {
+		case <-f.reConnectSignal:
+			f.connect()
+		}
+	}
+}
+
+func (r *Relays) GetPendingSpamMessages() int {
+	if r.spam == nil {
+		return 0
+	}
+	return len(r.spam.sendChan)
+}
+
+func (r *Relays) GetPendingDebugMessages() int {
+	if r.debug == nil {
+		return 0
+	}
+	return len(r.debug.sendChan)
+}
+
+func (r *Relays) GetPendingRevertMessages() int {
+	if r.revert == nil {
+		return 0
+	}
+	return len(r.revert.sendChan)
+}

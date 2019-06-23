@@ -1,0 +1,64 @@
+name: Continuous Integration
+on:
+  push: {branches: [main]}
+  pull_request: {}
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.16'
+      - run: go build
+  test:
+    runs-on: ubuntu-20.04
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ''
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+        ports:
+          - '3306:3306'
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.16'
+      - name: Setup MySQL
+        run: |
+          while true;
+          do
+            if [ "$(mysql -h 127.0.0.1 -u root -N -s -e 'select 1' 2> /dev/null)" == "1" ];
+            then
+              break
+            fi
+            sleep 1
+          done
+
+          mysql -h 127.0.0.1 -u root -e 'create database cbng; create database enwiki_p'
+
+          mysql -h 127.0.0.1 -u root cbng < cluebot.sql
+          mysql -h 127.0.0.1 -u root enwiki_p < .github/enwiki_p.sql
+      - run: go test
+        env:
+          BOT_CFG: .github/config.yaml
+  vet:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.16'
+      - run: go vet
+  golangci:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.16'
+      - uses: golangci/golangci-lint-action@v2
