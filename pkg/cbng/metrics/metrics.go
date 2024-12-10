@@ -39,6 +39,8 @@ var LoaderUserDistinctPageCountInUse prometheus.Gauge
 var LoaderUserWarnsCountInUse prometheus.Gauge
 var LoaderPageRevisionInUse prometheus.Gauge
 
+var ReplicaStats *prometheus.GaugeVec
+
 var OtelTracer trace.Tracer
 
 func init() {
@@ -76,4 +78,6 @@ func init() {
 
 	IrcNotificationsPending = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: "cbng_irc_notifications_pending"}, []string{"channel"})
 	IrcNotificationsSent = promauto.NewCounterVec(prometheus.CounterOpts{Name: "cbng_irc_notifications_sent"}, []string{"channel"})
+
+	ReplicaStats = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: "cbng_database_replica"}, []string{"instance", "metric"})
 }

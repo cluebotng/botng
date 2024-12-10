@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-func RunMetricPoller(wg *sync.WaitGroup, toReplicationWatcher, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays) {
+func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays, db *database.DatabaseConnection) {
 	wg.Add(1)
 	defer wg.Done()
 
@@ -42,6 +42,8 @@ func RunMetricPoller(wg *sync.WaitGroup, toReplicationWatcher, toPageMetadataLoa
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "debug"}).Set(float64(r.GetPendingDebugMessages()))
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "revert"}).Set(float64(r.GetPendingRevertMessages()))
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "spam"}).Set(float64(r.GetPendingSpamMessages()))
+
+		db.UpdateMetrics()
 	}
 }
 
@@ -148,7 +150,7 @@ func main() {
 	toScoringProcessor := make(chan *model.ProcessEvent, 10000)
 	toRevertProcessor := make(chan *model.ProcessEvent, 10000)
 
-	go RunMetricPoller(&wg, toReplicationWatcher, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r)
+	go RunMetricPoller(&wg, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r, db)
 
 	go feed.ConsumeHttpChangeEvents(&wg, configuration, toReplicationWatcher)
 	go processor.ReplicationWatcher(&wg, configuration, db, ignoreReplicationDelay, toReplicationWatcher, toPageMetadataLoader)

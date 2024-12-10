@@ -8,6 +8,7 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/codes"
 	"math/rand"
@@ -49,7 +50,15 @@ func NewReplicaInstance(configuration *config.Configuration) *ReplicaInstance {
 }
 
 func (ri *ReplicaInstance) getHandle() *sql.DB {
-	return ri.handlers[rand.Intn(len(ri.handlers))]
+	logger := logrus.WithFields(logrus.Fields{
+		"function": "database.replica.DisconnectFromDatabase",
+	})
+	numberOfHandlers := len(ri.handlers)
+	if numberOfHandlers > 0 {
+		return ri.handlers[rand.Intn(len(ri.handlers))]
+	}
+	logger.Warnf("Could not find handler: %d", numberOfHandlers)
+	return nil
 }
 
 func (ri *ReplicaInstance) DisconnectFromDatabase() {
@@ -386,4 +395,19 @@ func (ri *ReplicaInstance) GetLatestChangeTimestamp(l *logrus.Entry, ctx context
 	}
 
 	return int64(replicationDelay[0]), nil
+}
+
+func (ri *ReplicaInstance) UpdateMetrics() {
+	for i, handler := range ri.handlers {
+		stats := handler.Stats()
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "max_open"}).Set(float64(stats.MaxOpenConnections))
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "idle"}).Set(float64(stats.Idle))
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "open"}).Set(float64(stats.OpenConnections))
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "in_use"}).Set(float64(stats.InUse))
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "wait"}).Set(float64(stats.WaitCount))
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "wait_duration"}).Set(float64(stats.WaitDuration))
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "idle_closed"}).Set(float64(stats.MaxIdleClosed))
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "idle_time_closed"}).Set(float64(stats.MaxIdleTimeClosed))
+		metrics.ReplicaStats.With(prometheus.Labels{"instance": fmt.Sprintf("%d", i), "metric": "lifetime_closed"}).Set(float64(stats.MaxLifetimeClosed))
+	}
 }
