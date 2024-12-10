@@ -100,7 +100,7 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	coreUrl := fmt.Sprintf("%s:%d", coreHost, configuration.Core.Port)
 	logger.Tracef("Connecting to %v", coreUrl)
 
-	dialer := net.Dialer{Timeout: time.Second * 10}
+	dialer := net.Dialer{Timeout: time.Second * 5}
 	conn, err := dialer.Dial("tcp", coreUrl)
 	if err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())
@@ -109,12 +109,12 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	}
 	defer conn.Close()
 
-	if err := conn.SetDeadline(time.Now().Add(time.Second * 2)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(time.Second * 10)); err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Could not set deadline: %v", err)
 		return false, err
 	}
-	if err := conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second * 10)); err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Could not set read deadline: %v", err)
 		return false, err
