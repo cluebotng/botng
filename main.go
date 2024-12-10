@@ -82,7 +82,7 @@ func main() {
 		},
 	})
 
-	logFile := "cbng.log"
+	logFile := "botng.log"
 	if value, ok := os.LookupEnv("BOTNG_LOG"); ok {
 		logFile = value
 	}
