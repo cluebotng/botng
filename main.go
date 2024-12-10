@@ -133,6 +133,7 @@ func main() {
 
 	r := relay.NewRelays(&wg, useIrcRelay, configuration.Irc.Server, configuration.Irc.Port, configuration.Irc.Username, configuration.Irc.Password, configuration.Irc.Channel)
 	db := database.NewDatabaseConnection(configuration)
+	defer db.Disconnect()
 
 	// Processing channels
 	toReplicationWatcher := make(chan *model.ProcessEvent, 10000)

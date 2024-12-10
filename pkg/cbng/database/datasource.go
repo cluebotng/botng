@@ -18,3 +18,7 @@ func NewDatabaseConnection(configuration *config.Configuration) *DatabaseConnect
 	}
 	return &c
 }
+
+func (dbc *DatabaseConnection) Disconnect() {
+	dbc.Replica.DisconnectFromDatabase()
+}
