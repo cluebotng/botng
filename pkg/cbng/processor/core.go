@@ -109,20 +109,9 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	}
 	defer conn.Close()
 
-	if err := conn.SetDeadline(time.Now().Add(time.Second * 20)); err != nil {
-		scoreSpan.SetStatus(codes.Error, err.Error())
-		logger.Errorf("Could not set deadline: %v", err)
-		return false, err
-	}
 	if _, err := conn.Write(xmlData); err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())
 		logger.Infof("Could not write payload: %v", err)
-		return false, err
-	}
-
-	if err := conn.SetReadDeadline(time.Now().Add(time.Second * 20)); err != nil {
-		scoreSpan.SetStatus(codes.Error, err.Error())
-		logger.Errorf("Could not set read deadline: %v", err)
 		return false, err
 	}
 	response := []byte{}
