@@ -103,7 +103,7 @@ func NewConfiguration() *Configuration {
 	configuration := Configuration{}
 
 	var configPath string
-	if val, ok := os.LookupEnv("BOT_CFG"); ok {
+	if val, ok := os.LookupEnv("BOTNG_CFG"); ok {
 		configPath = val
 	}
 	if configPath != "" {

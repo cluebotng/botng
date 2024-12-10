@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -80,8 +81,13 @@ func main() {
 			logrus.FieldKeyMsg:   "message",
 		},
 	})
+
+	logFile := "cbng.log"
+	if value, ok := os.LookupEnv("BOTNG_LOG"); ok {
+		logFile = value
+	}
 	logrus.AddHook(helpers.NewLogFileHook(&lumberjack.Logger{
-		Filename:   "cbng.log",
+		Filename:   logFile,
 		MaxBackups: 31,
 		MaxAge:     1,
 		Compress:   true,
