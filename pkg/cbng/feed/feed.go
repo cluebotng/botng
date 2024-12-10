@@ -41,8 +41,7 @@ type httpChangeEvent struct {
 }
 
 func handleLine(logger *logrus.Entry, line string, configuration *config.Configuration, changeFeed chan<- *model.ProcessEvent) {
-	parts := strings.Split(line, ": ")
-	if len(parts) == 2 && parts[0] == "data" {
+	if len(line) > 5 && line[0:5] == "data:" {
 		rootCtx, rootSpan := metrics.OtelTracer.Start(context.Background(), "feed.ConsumeHttpChangeEvents.event")
 		rootUUID := uuid.NewV4().String()
 		rootSpan.SetAttributes(attribute.String("uuid", rootUUID))
@@ -50,7 +49,7 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 
 		_, decodeSpan := metrics.OtelTracer.Start(rootCtx, "feed.ConsumeHttpChangeEvents.event.unmarshal")
 		httpChange := httpChangeEvent{}
-		if err := json.Unmarshal([]byte(parts[1]), &httpChange); err != nil {
+		if err := json.Unmarshal([]byte(line[5:]), &httpChange); err != nil {
 			logger.Warnf("Decoding failed: %v", err)
 			decodeSpan.SetStatus(codes.Error, err.Error())
 			decodeSpan.End()
@@ -86,19 +85,14 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 
 			logger.WithFields(logrus.Fields{"uuid": change.Uuid, "change": change}).Debug("Received new event")
 			metrics.EditStatus.With(prometheus.Labels{"state": "received_new", "status": "success"}).Inc()
-
-			select {
-			case changeFeed <- &change:
-			default:
-				logger.Errorf("Failed to write to change feed")
-			}
+			changeFeed <- &change
 		}
 	}
 }
 
 func streamFeed(logger *logrus.Entry, configuration *config.Configuration, changeFeed chan<- *model.ProcessEvent) bool {
 	logger.Info("Connecting to feed")
-	req, err := http.NewRequest("GET", "https://stream.wikimedia.org/v2/stream/recentchange", nil)
+	req, err := http.NewRequest("GET", "https://stream.wikimedia.org/v2/stream/mediawiki.recentchange", nil)
 	if err != nil {
 		logger.Errorf("Could not build request: %v", err)
 		return false
