@@ -24,6 +24,7 @@ func loadSinglePageMetadata(logger *logrus.Entry, ctx context.Context, change *m
 		metrics.EditStatus.With(prometheus.Labels{"state": "verify_namespace", "status": "skipped"}).Inc()
 		return nil
 	}
+	metrics.EditStatus.With(prometheus.Labels{"state": "verify_namespace", "status": "success"}).Inc()
 
 	// Load the page created metadata
 	pageCreatedUser, pageCreatedTimestamp, err := db.Replica.GetPageCreatedTimeAndUser(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title))
