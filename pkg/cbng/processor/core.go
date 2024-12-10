@@ -100,7 +100,7 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	coreUrl := fmt.Sprintf("%s:%d", coreHost, configuration.Core.Port)
 	logger.Tracef("Connecting to %v", coreUrl)
 
-	dialer := net.Dialer{Timeout: time.Second * 2}
+	dialer := net.Dialer{Timeout: time.Second * 10}
 	conn, err := dialer.Dial("tcp", coreUrl)
 	if err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())
