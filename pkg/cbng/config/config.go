@@ -11,10 +11,11 @@ import (
 var ReleaseTag = "development"
 
 type BotConfiguration struct {
-	Owner   string
-	Friends []string
-	Run     bool
-	Angry   bool
+	Owner    string
+	Friends  []string
+	Run      bool
+	Angry    bool
+	ReadOnly bool
 }
 
 type WikipediaConfiguration struct {
@@ -32,9 +33,9 @@ type CluebotSqlConfiguration struct {
 }
 
 type ReplicaSqlConfiguration struct {
-	Host        string
-	Port        int
-	Schema      string
+	Host     string
+	Port     int
+	Schema   string
 	Username string
 	Password string
 }
@@ -45,11 +46,11 @@ type SqlConfiguration struct {
 }
 
 type DynamicConfiguration struct {
-	HuggleUserWhitelist   []string
-	TFA string
-	AngryOptinPages       []string
-	NamespaceOptIn        []string
-	Run                   bool
+	HuggleUserWhitelist []string
+	TFA                 string
+	AngryOptinPages     []string
+	NamespaceOptIn      []string
+	Run                 bool
 }
 
 type IrcRelayChannelConfiguration struct {
@@ -58,23 +59,12 @@ type IrcRelayChannelConfiguration struct {
 	Debug  string
 }
 
-type IrcRelayConfiguration struct {
+type IrcConfiguration struct {
 	Server   string
 	Port     int
 	Username string
 	Password string
 	Channel  IrcRelayChannelConfiguration
-}
-
-type IrcFeedConfiguration struct {
-	Server   string
-	Port     int
-	Channels []string
-}
-
-type IrcConfiguration struct {
-	Relay IrcRelayConfiguration
-	Feed  IrcFeedConfiguration
 }
 
 type CoreConfiguration struct {
@@ -91,7 +81,7 @@ type Instances struct {
 	HuggleConfiguration     *HuggleConfigurationInstance
 	NamespaceOptIn          *NamespaceOptInInstance
 	Run                     *RunInstance
-	TFA   *TFAInstance
+	TFA                     *TFAInstance
 }
 
 type Configuration struct {
@@ -113,7 +103,9 @@ func NewConfiguration() *Configuration {
 	configuration := Configuration{}
 
 	var configPath string
-	if val, ok := os.LookupEnv("BOT_CFG"); ok { configPath = val }
+	if val, ok := os.LookupEnv("BOT_CFG"); ok {
+		configPath = val
+	}
 	if configPath != "" {
 		viper.SetConfigFile(configPath)
 	} else {

@@ -1,8 +1,8 @@
 package config
 
 import (
+	"context"
 	"fmt"
-	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
 	"regexp"
@@ -27,16 +27,19 @@ func (t *TFAInstance) GetPageName() string {
 func (t *TFAInstance) start(wg *sync.WaitGroup) {
 	logger := logrus.WithField("function", "config.TFAInstance.start")
 	t.reload()
+
+	wg.Add(1)
 	go func(wg *sync.WaitGroup) {
-		wg.Add(1)
 		defer wg.Done()
+
+		timer := time.NewTicker(time.Hour)
 		for {
 			select {
-			case <-time.Tick(time.Duration(time.Hour)):
-				logger.Infof("Reloading From Timer")
+			case <-timer.C:
+				logger.Debugf("Reloading From Timer")
 				t.reload()
 			case <-t.reloadChan:
-				logger.Infof("Reloading From Trigger")
+				logger.Debugf("Reloading From Trigger")
 				t.reload()
 			}
 		}
@@ -45,18 +48,19 @@ func (t *TFAInstance) start(wg *sync.WaitGroup) {
 
 func (t *TFAInstance) reload() {
 	logger := logrus.WithField("function", "config.TFAInstance.reload")
-	timer := helpers.NewTimeLogger("config.TFAInstance.reload", map[string]interface{}{})
-	defer timer.Done()
 
-	revision := t.w.GetPage(logger, t.GetPageName())
+	revision := t.w.GetPage(logger, context.Background(), t.GetPageName())
 	if revision != nil {
 		article := regexp.MustCompile(`{{TFAFULL\|([^}]+)}}`).FindAllStringSubmatch(revision.Data, 1)
 		if len(article) != 1 {
-			logger.Warnf("Failed to find TFA: '%v'", revision.Data)
+			logger.Errorf("Failed to find TFA: '%v'", revision.Data)
 			return
 		}
-		logger.Infof("Updated TFA to '%v'", article[0][1])
-		t.c.Dynamic.TFA = article[0][1]
+
+		if t.c.Dynamic.TFA != article[0][1] {
+			logger.Infof("Updating TFA to '%v'", article[0][1])
+			t.c.Dynamic.TFA = article[0][1]
+		}
 	}
 }
 

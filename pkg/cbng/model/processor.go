@@ -18,7 +18,7 @@ type ProcessEventCommon struct {
 
 type ProcessEventRevision struct {
 	Timestamp int64
-	Text      string
+	Text      string `json:"-"`
 	Id        int64
 }
 
@@ -32,7 +32,7 @@ type ProcessEventUser struct {
 
 type ProcessEvent struct {
 	Uuid           string
-	StartTime      time.Time
+	ReceivedTime   time.Time
 	Attempts       int32
 	EditType       string
 	EditId         int64
@@ -48,7 +48,7 @@ type ProcessEvent struct {
 }
 
 func (pe *ProcessEvent) FormatIrcRevert() string {
-	return fmt.Sprintf("[[%s]] by \"%s\" (%s) %d",
+	return fmt.Sprintf("[[%s]] by \"%s\" (%s) %f",
 		pe.TitleWithNamespace(),
 		pe.User.Username,
 		pe.GetDiffUrl(),

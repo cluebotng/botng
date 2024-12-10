@@ -2,11 +2,9 @@ package helpers
 
 import (
 	"fmt"
-	"github.com/honeycombio/libhoney-go"
 	"github.com/sirupsen/logrus"
 	"net"
 	"strings"
-	"time"
 )
 
 var namespacesByName map[string]int64
@@ -87,72 +85,4 @@ func AivUserVandalType(user string) string {
 	}
 	logrus.Debugf("Parsed '%v' as Vandal", user)
 	return "Vandal"
-}
-
-//type TimingContext struct {
-//	ctx       context.Context
-//	ctxCancel func()
-//	startTime time.Time
-//	done      bool
-//	mtx       sync.Mutex
-//	ev        *libhoney.Event
-//}
-//
-//// This is sort of gross, thanks database/sql
-//func NewTimingContext(timeout time.Duration, honeyFields map[string]interface{}) *TimingContext {
-//	ctx, ctxCancel := context.WithTimeout(context.Background(), timeout)
-//
-//	ev := libhoney.NewEvent()
-//	ev.Add(honeyFields)
-//
-//	tc := TimingContext{
-//		ctx:       ctx,
-//		ctxCancel: ctxCancel,
-//		startTime: time.Now(),
-//		done:      false,
-//		mtx:       sync.Mutex{},
-//		ev:        ev,
-//	}
-//	return &tc
-//}
-//
-//func (tc *TimingContext) Done() time.Duration {
-//	tc.mtx.Lock()
-//	defer tc.mtx.Unlock()
-//	if !tc.done {
-//		tc.done = true
-//		tc.ctxCancel()
-//
-//		tc.ev.AddField("duration_ms", time.Since(tc.startTime).Nanoseconds()/1000000)
-//		tc.			if err := ev.Send(); err != nil {
-//				logger.Warnf("Failed to send to honeycomb: %+v", err)
-///			}
-//	}
-//	return time.Since(tc.startTime)
-//}
-//
-//func (tc *TimingContext) Ctx() context.Context {
-//	return tc.ctx
-//}
-
-type TimeLogger struct {
-	startTime time.Time
-	ev        *libhoney.Event
-}
-
-// This is sort of gross, thanks database/sql
-func NewTimeLogger(function string, args map[string]interface{}) *TimeLogger {
-	ev := libhoney.NewEvent()
-	ev.AddField("cbng.function", function)
-	ev.AddField("cbng.function.args", args)
-
-	tc := TimeLogger{ev: ev, startTime: time.Now()}
-	return &tc
-}
-
-func (tl *TimeLogger) Done() {
-	tl.ev.AddField("duration_ms", time.Since(tl.startTime).Nanoseconds()/1000000)
-	if err := tl.ev.Send(); err != nil {
-		logrus.Warnf("Failed to send to honeycomb: %+v", err)
-	}
 }

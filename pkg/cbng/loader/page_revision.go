@@ -1,31 +1,30 @@
 package loader
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/cluebotng/botng/pkg/cbng/relay"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
-	"github.com/honeycombio/libhoney-go"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"sync"
-	"time"
 )
 
-func loadSinglePageRevision(logger *logrus.Entry, change *model.ProcessEvent, api *wikipedia.WikipediaApi, outChangeFeed chan *model.ProcessEvent) error {
-	timer := helpers.NewTimeLogger("loader.loadSinglePageRevision", map[string]interface{}{})
-	defer timer.Done()
+func loadSinglePageRevision(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, api *wikipedia.WikipediaApi, outChangeFeed chan *model.ProcessEvent) error {
 
 	// Pull the revisions from the API
-	revisionData := api.GetRevision(logger, change.Common.Title, change.Current.Id)
-	logger = logrus.WithField("revision", revisionData)
+	revisionData := api.GetRevision(logger, ctx, change.Common.Title, change.Current.Id)
 	if revisionData == nil ||
 		revisionData.Current.Timestamp == 0 ||
 		revisionData.Current.Data == "" ||
 		revisionData.Previous.Timestamp == 0 ||
 		revisionData.Previous.Data == "" {
+		metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_revisions", "status": "failed"}).Inc()
 		return errors.New("failed to get complete revision data")
 	}
 
@@ -40,6 +39,7 @@ func loadSinglePageRevision(logger *logrus.Entry, change *model.ProcessEvent, ap
 		Id:        revisionData.Previous.Id,
 	}
 
+	metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_revisions", "status": "success"}).Inc()
 	outChangeFeed <- change
 	return nil
 }
@@ -48,24 +48,19 @@ func LoadPageRevision(wg *sync.WaitGroup, api *wikipedia.WikipediaApi, r *relay.
 	logger := logrus.WithField("function", "loader.LoadPageRevision")
 	wg.Add(1)
 	defer wg.Done()
-	for {
-		select {
-		case change := <-inChangeFeed:
-			metrics.LoaderPageRevisionInUse.Inc()
-			startTime := time.Now()
-			ev := libhoney.NewEvent()
-			ev.AddField("cbng.function", "loader.loadSinglePageRevision")
-			logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid, "change": change})
-			if err := loadSinglePageRevision(logger, change, api, outChangeFeed); err != nil {
-				logger.Errorf(err.Error())
-				ev.AddField("error", err.Error())
-				r.SendDebug(fmt.Sprintf("%v # Failed to get page revision", change.FormatIrcChange()))
-			}
-			ev.AddField("duration_ms", time.Since(startTime).Nanoseconds()/1000000)
-						if err := ev.Send(); err != nil {
-				logger.Warnf("Failed to send to honeycomb: %+v", err)
-			}
-			metrics.LoaderPageRevisionInUse.Dec()
+	for change := range inChangeFeed {
+		metrics.LoaderPageRevisionInUse.Inc()
+		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadPageRevision")
+		span.SetAttributes(attribute.String("uuid", change.Uuid))
+
+		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
+		if err := loadSinglePageRevision(logger, ctx, change, api, outChangeFeed); err != nil {
+			logger.Error(err.Error())
+			span.SetStatus(codes.Error, err.Error())
+			r.SendDebug(fmt.Sprintf("%v # Failed to get page revision", change.FormatIrcChange()))
 		}
+
+		span.End()
+		metrics.LoaderPageRevisionInUse.Dec()
 	}
 }

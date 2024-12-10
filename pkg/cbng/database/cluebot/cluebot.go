@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
-	"github.com/cluebotng/botng/pkg/cbng/helpers"
+	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/codes"
 	"time"
 )
 
@@ -24,8 +25,6 @@ func (ci *CluebotInstance) getDatabaseConnection() *sql.DB {
 	logger := logrus.WithFields(logrus.Fields{
 		"function": "database.cluebot.getDatabaseConnection",
 	})
-	timer := helpers.NewTimeLogger("database.cluebot.getDatabaseConnection", map[string]interface{}{})
-	defer timer.Done()
 
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=1s", ci.cfg.Username, ci.cfg.Password, ci.cfg.Host, ci.cfg.Port, ci.cfg.Schema))
 	if err != nil {
@@ -38,40 +37,24 @@ func (ci *CluebotInstance) getDatabaseConnection() *sql.DB {
 	return db
 }
 
-func (ci *CluebotInstance) GenerateVandalismId(l *logrus.Entry, user, title, reason, diffUrl string, previousId, currentId int64) (int64, error) {
-	logger := l.WithFields(logrus.Fields{
-		"function": "database.cluebot.GenerateVandalismId",
-		"args": map[string]interface{}{
-			"user":       user,
-			"title":      title,
-			"reason":     reason,
-			"diffUrl":    diffUrl,
-			"previousId": previousId,
-			"currentId":  currentId,
-		},
-	})
-	timer := helpers.NewTimeLogger("database.cluebot.GenerateVandalismId", map[string]interface{}{
-		"user":       user,
-		"title":      title,
-		"reason":     reason,
-		"diffUrl":    diffUrl,
-		"previousId": previousId,
-		"currentId":  currentId,
-	})
-	defer timer.Done()
+func (ci *CluebotInstance) GenerateVandalismId(logger *logrus.Entry, ctx context.Context, user, title, reason, diffUrl string, previousId, currentId int64) (int64, error) {
+	_, span := metrics.OtelTracer.Start(ctx, "database.cluebot.GenerateVandalismId")
+	defer span.End()
 
 	var vandalismId int64
 
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
-	res, err := db.Exec( "INSERT INTO `vandalism` (`id`,`user`,`article`,`heuristic`,`reason`,`diff`,`old_id`,`new_id`,`reverted`) VALUES (NULL, ?, ?, '', ?, ?, ?, ?, 0)", user, title, reason, diffUrl, previousId, currentId)
+	res, err := db.Exec("INSERT INTO `vandalism` (`id`,`user`,`article`,`heuristic`,`reason`,`diff`,`old_id`,`new_id`,`reverted`) VALUES (NULL, ?, ?, '', ?, ?, ?, ?, 0)", user, title, reason, diffUrl, previousId, currentId)
 	if err != nil {
-		logger.Infof("Error running query: %v", err)
+		logger.Errorf("Error running query: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 		return vandalismId, err
 	}
 	if vandalismId, err := res.LastInsertId(); err != nil {
-		logger.Infof("Failed to get insert id: %v", err)
+		logger.Errorf("Failed to get insert id: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 		return vandalismId, err
 	}
 
@@ -79,29 +62,28 @@ func (ci *CluebotInstance) GenerateVandalismId(l *logrus.Entry, user, title, rea
 	return vandalismId, nil
 }
 
-func (ci *CluebotInstance) MarkVandalismRevertedSuccessfully(l *logrus.Entry, vandalismId int64) {
+func (ci *CluebotInstance) MarkVandalismRevertedSuccessfully(l *logrus.Entry, ctx context.Context, vandalismId int64) {
 	logger := l.WithFields(logrus.Fields{
 		"function": "database.cluebot.MarkVandalismRevertedSuccessfully",
 		"args": map[string]interface{}{
 			"vandalismId": vandalismId,
 		},
 	})
-	timer := helpers.NewTimeLogger("database.cluebot.MarkVandalismRevertedSuccessfully", map[string]interface{}{
-		"vandalismId": vandalismId,
-	})
-	defer timer.Done()
+	_, span := metrics.OtelTracer.Start(ctx, "database.cluebot.MarkVandalismRevertedSuccessfully")
+	defer span.End()
 
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
 	if _, err := db.Exec("UPDATE `vandalism` SET `reverted` = 1 WHERE `id` = ?", vandalismId); err != nil {
 		logger.Errorf("Error running query: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 		return
 	}
 	logger.Infoln("Updated reverted status (reverted)")
 }
 
-func (ci *CluebotInstance) MarkVandalismRevertBeaten(l *logrus.Entry, vandalismId int64, pageTitle, diffUrl, beatenUser string) {
+func (ci *CluebotInstance) MarkVandalismRevertBeaten(l *logrus.Entry, ctx context.Context, vandalismId int64, pageTitle, diffUrl, beatenUser string) {
 	logger := l.WithFields(logrus.Fields{
 		"function": "database.cluebot.MarkVandalismRevertBeaten",
 		"args": map[string]interface{}{
@@ -110,23 +92,21 @@ func (ci *CluebotInstance) MarkVandalismRevertBeaten(l *logrus.Entry, vandalismI
 			"pageTitle":   pageTitle,
 		},
 	})
-	timer := helpers.NewTimeLogger("database.cluebot.MarkVandalismRevertBeaten", map[string]interface{}{
-		"vandalismId": vandalismId,
-		"beatenUser":  beatenUser,
-		"pageTitle":   pageTitle,
-	})
-	defer timer.Done()
+	_, span := metrics.OtelTracer.Start(ctx, "database.cluebot.MarkVandalismRevertBeaten")
+	defer span.End()
 
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
 	if _, err := db.Exec("UPDATE `vandalism` SET `reverted` = 0 WHERE `id` = ?", vandalismId); err != nil {
 		logger.Errorf("Error running vandalism query: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 		return
 	}
 
 	if _, err := db.Exec("INSERT INTO `beaten` (`id`, `article`, `diff`, `user`) VALUES (NULL, ?, ?, ?)", pageTitle, diffUrl, beatenUser); err != nil {
 		logger.Errorf("Error running beaten query: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 		return
 	}
 	logger.Infoln("Updated reverted status (beaten)")
@@ -139,11 +119,6 @@ func (ci *CluebotInstance) GetServiceHost(l *logrus.Entry, service string) strin
 			"service": service,
 		},
 	})
-	timer := helpers.NewTimeLogger("database.cluebot.GetServiceHost", map[string]interface{}{
-		"service": service,
-	})
-	defer timer.Done()
-
 	var host string
 
 	db := ci.getDatabaseConnection()
@@ -158,7 +133,7 @@ func (ci *CluebotInstance) GetServiceHost(l *logrus.Entry, service string) strin
 			logger.Infof("No data found for query")
 		} else {
 			if err := rows.Scan(&host); err != nil {
-				logger.Warnf("Error reading rows for query: %v", err)
+				logger.Errorf("Error reading rows for query: %v", err)
 			}
 		}
 	}
@@ -166,7 +141,7 @@ func (ci *CluebotInstance) GetServiceHost(l *logrus.Entry, service string) strin
 	return host
 }
 
-func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, title, user string) int64 {
+func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, ctx context.Context, title, user string) int64 {
 	logger := l.WithFields(logrus.Fields{
 		"function": "database.cluebot.GetLastRevertTime",
 		"args": map[string]interface{}{
@@ -174,27 +149,28 @@ func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, title, user string
 			"user":  user,
 		},
 	})
-	timer := helpers.NewTimeLogger("database.cluebot.GetServiceHost", map[string]interface{}{
-		"title": title,
-		"user":  user,
-	})
-	defer timer.Done()
+	_, span := metrics.OtelTracer.Start(ctx, "database.cluebot.GetLastRevertTime")
+	defer span.End()
 
 	var revertTime int64
-	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
+	defer cancel()
+
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
-	rows, err := db.QueryContext(ctx, "SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
+	rows, err := db.QueryContext(timeoutCtx, "SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
 	if err != nil {
 		logger.Infof("Error running query: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 	} else {
 		defer rows.Close()
 		if !rows.Next() {
 			logger.Infof("No data found for query")
 		} else {
 			if err := rows.Scan(&revertTime); err != nil {
-				logger.Warnf("Error reading rows for query: %v", err)
+				logger.Errorf("Error reading rows for query: %v", err)
+				span.SetStatus(codes.Error, err.Error())
 			}
 		}
 	}
@@ -202,7 +178,7 @@ func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, title, user string
 	return revertTime
 }
 
-func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, title, user string) int64 {
+func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, title, user string) int64 {
 	logger := l.WithFields(logrus.Fields{
 		"function": "database.cluebot.SaveRevertTime",
 		"args": map[string]interface{}{
@@ -210,28 +186,29 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, title, user string) i
 			"user":  user,
 		},
 	})
-	timer := helpers.NewTimeLogger("database.cluebot.GetServiceHost", map[string]interface{}{
-		"title": title,
-		"user":  user,
-	})
-	defer timer.Done()
+	_, span := metrics.OtelTracer.Start(ctx, "database.cluebot.SaveRevertTime")
+	defer span.End()
 
 	var revertTime int64
-	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
+	defer cancel()
+
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
-	rows, err := db.QueryContext(ctx, "INSERT INTO `last_revert` (`title`, `user`, `time`) "+
+	rows, err := db.QueryContext(timeoutCtx, "INSERT INTO `last_revert` (`title`, `user`, `time`) "+
 		"VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `time`=`time`", title, user, time.Now().UTC().Unix())
 	if err != nil {
 		logger.Infof("Error running query: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 	} else {
 		defer rows.Close()
 		if !rows.Next() {
 			logger.Infof("No data found for query")
 		} else {
 			if err := rows.Scan(&revertTime); err != nil {
-				logger.Warnf("Error reading rows for query: %v", err)
+				logger.Errorf("Error reading rows for query: %v", err)
+				span.SetStatus(codes.Error, err.Error())
 			}
 		}
 	}

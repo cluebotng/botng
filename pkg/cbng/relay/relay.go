@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 	"net"
@@ -15,8 +16,8 @@ import (
 
 type Relays struct {
 	revert *IrcServer
-	spam *IrcServer
-	debug *IrcServer
+	spam   *IrcServer
+	debug  *IrcServer
 }
 
 type IrcServer struct {
@@ -41,10 +42,10 @@ func (f *IrcServer) connect() {
 	})
 
 	if f.connection == nil {
-		logger.Info("Connecting to IRC server")
+		logger.Tracef("Connecting to IRC server")
 		conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", f.host, f.port), &tls.Config{})
 		if err != nil {
-			logger.Warnf("IRC error: %v\n", err)
+			logger.Errorf("IRC error: %v\n", err)
 			f.close()
 			return
 		}
@@ -63,7 +64,7 @@ func (f *IrcServer) close() {
 		},
 	})
 
-	logger.Warnf("Closing connection to IRC server")
+	logger.Info("Closing connection to IRC server")
 	if f.connection != nil {
 		f.connection.Close()
 	}
@@ -80,7 +81,7 @@ func (f *IrcServer) send(message string) bool {
 	logger := logrus.WithFields(logrus.Fields{
 		"function": "relay.IrcServer.send",
 		"args": map[string]interface{}{
-			"nick": f.nick,
+			"nick":    f.nick,
 			"message": loggerMessage,
 		},
 	})
@@ -103,7 +104,7 @@ func (f *IrcServer) send(message string) bool {
 }
 
 func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, password string, channels config.IrcRelayChannelConfiguration) *Relays {
-	servers := map[string]*IrcServer {}
+	servers := map[string]*IrcServer{}
 	if enableIrc {
 		for _, relayType := range []string{"debug", "revert", "spam"} {
 			var channel string
@@ -120,7 +121,7 @@ func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, 
 			f := IrcServer{
 				host:            host,
 				port:            port,
-				nick:            fmt.Sprintf("%v_%v", nick, relayType),
+				nick:            fmt.Sprintf("%v-%v", nick, relayType),
 				password:        password,
 				sendChan:        make(chan string, 10000),
 				reConnectSignal: make(chan bool, 1),
@@ -135,29 +136,29 @@ func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, 
 	}
 
 	r := Relays{
-		spam: servers["spam"],
+		spam:   servers["spam"],
 		revert: servers["revert"],
-		debug: servers["debug"],
+		debug:  servers["debug"],
 	}
 	return &r
 }
 
 func (r *Relays) SendDebug(message string) {
-	metrics.IrcSentDebug.Inc()
+	metrics.IrcNotificationsSent.With(prometheus.Labels{"channel": "debug"}).Inc()
 	if r.debug != nil {
 		r.debug.sendChan <- message
 	}
 }
 
 func (r *Relays) SendRevert(message string) {
-	metrics.IrcSentRevert.Inc()
+	metrics.IrcNotificationsSent.With(prometheus.Labels{"channel": "revert"}).Inc()
 	if r.revert != nil {
 		r.revert.sendChan <- message
 	}
 }
 
 func (r *Relays) SendSpam(message string) {
-	metrics.IrcSentSpam.Inc()
+	metrics.IrcNotificationsSent.With(prometheus.Labels{"channel": "spam"}).Inc()
 	if r.spam != nil {
 		r.spam.sendChan <- message
 	}
@@ -175,11 +176,10 @@ func (f *IrcServer) reader(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	nickCount := 0
+	currentNick := strings.ReplaceAll(f.nick, " ", "-")
 	for {
 		if f.connection == nil {
-			select {
-			case f.reConnectSignal <- true:
-			}
+			f.reConnectSignal <- true
 			if f.connection == nil {
 				continue
 			}
@@ -196,20 +196,21 @@ func (f *IrcServer) reader(wg *sync.WaitGroup) {
 
 		switch {
 		case lparts[0] == "ERROR":
-			llogger.Warnf("Received error: %v", line)
+			llogger.Errorf("Received error: %v", line)
 			f.close()
 		case lparts[0] == "PING":
-			f.send(fmt.Sprintf("PING %s", strings.TrimLeft(lparts[1], ":")))
+			f.send(fmt.Sprintf("PONG %s", strings.TrimLeft(lparts[1], ":")))
 		case len(lparts) >= 2 && (lparts[1] == "376" || lparts[1] == "422"):
 			if f.password != "" {
-				f.send(fmt.Sprintf("PRIVMSG NickServ :IDENTIFY %s %s", strings.ReplaceAll(f.nick, " ", "_"), f.password))
+				f.send(fmt.Sprintf("PRIVMSG NickServ :IDENTIFY %s %s", currentNick, f.password))
 			}
 			f.send(fmt.Sprintf("JOIN #%s", f.channel))
 			go f.writer(wg)
 		case len(lparts) >= 2 && lparts[1] == "433":
-			llogger.Warnf("Nick already in use")
-			nickCount += 1
-			f.send(fmt.Sprintf("NICK %s_%d\n", strings.ReplaceAll(f.nick, " ", "_"), nickCount))
+			nickCount++
+			currentNick = fmt.Sprintf("%s_%d", currentNick, nickCount)
+			llogger.Warnf("Nick already in use - trying %s", currentNick)
+			f.send(fmt.Sprintf("NICK %s\n", currentNick))
 		default:
 			llogger.Tracef("Unsupported IRC event: %+v", lparts)
 		}
@@ -226,7 +227,7 @@ func (f *IrcServer) writer(wg *sync.WaitGroup) {
 
 	wg.Add(1)
 	defer wg.Done()
-	logger.Info("Started IRC writer")
+	logger.Tracef("Started IRC writer")
 	for {
 		// We will spawn a new writer on every connection
 		if f.connection == nil {
@@ -235,7 +236,7 @@ func (f *IrcServer) writer(wg *sync.WaitGroup) {
 		}
 		if f.limiter.Allow() {
 			message := <-f.sendChan
-			logger.Infof("Sending: %+v\n", message)
+			logger.Tracef("Sending: %+v\n", message)
 			if !f.send(fmt.Sprintf("PRIVMSG #%s :%s", f.channel, message)) {
 				logger.Warn("IRC write error")
 				break
@@ -251,10 +252,8 @@ func (f *IrcServer) reconnector(wg *sync.WaitGroup) {
 	wg.Add(1)
 	defer wg.Done()
 	for {
-		select {
-		case <-f.reConnectSignal:
-			f.connect()
-		}
+		<-f.reConnectSignal
+		f.connect()
 	}
 }
 

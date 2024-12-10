@@ -1,11 +1,11 @@
 package config
 
 import (
-	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -24,16 +24,19 @@ func (h *HuggleConfigurationInstance) TriggerReload() {
 func (h *HuggleConfigurationInstance) start(wg *sync.WaitGroup) {
 	logger := logrus.WithField("function", "config.HuggleConfigurationInstance.start")
 	h.reload()
+
+	wg.Add(1)
 	go func(wg *sync.WaitGroup) {
-		wg.Add(1)
 		defer wg.Done()
+
+		timer := time.NewTicker(time.Hour)
 		for {
 			select {
-			case <-time.Tick(time.Duration(time.Hour)):
-				logger.Infof("Reloading From Timer")
+			case <-timer.C:
+				logger.Debugf("Reloading From Timer")
 				h.reload()
 			case <-h.reloadChan:
-				logger.Infof("Reloading From Trigger")
+				logger.Debugf("Reloading From Trigger")
 				h.reload()
 			}
 		}
@@ -42,24 +45,22 @@ func (h *HuggleConfigurationInstance) start(wg *sync.WaitGroup) {
 
 func (h *HuggleConfigurationInstance) reload() {
 	logger := logrus.WithField("function", "config.HuggleConfigurationInstance.reload")
-	timer := helpers.NewTimeLogger("config.HuggleConfigurationInstance.reload", map[string]interface{}{})
-	defer timer.Done()
 
-	response, err := http.Get("https://huggle-wl.wmflabs.org/?action=read&wp=en.wikipedia.org")
+	response, err := http.Get("https://huggle.bena.rocks/?action=read&wp=en.wikipedia.org")
 	if err != nil {
-		logger.Warnf("Failed to build request: %v", err)
+		logger.Errorf("Failed to build request: %v", err)
 		return
 	}
 	defer response.Body.Close()
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		logger.Warnf("Failed to read response: %v", err)
+		logger.Errorf("Failed to read response: %v", err)
 		return
 	}
 
 	if response.StatusCode != 200 {
-		logger.Warnf("HTTP failure: %v", response.StatusCode)
+		logger.Errorf("HTTP failure: %v", response.StatusCode)
 		return
 	}
 
@@ -69,9 +70,11 @@ func (h *HuggleConfigurationInstance) reload() {
 			whitelist = append(whitelist, user)
 		}
 	}
-	logger.Infof("Updated Huggle User Whitelist")
-	logger.Debugf("Huggle User Whitelist Users Now: %+v", whitelist)
-	h.c.Dynamic.HuggleUserWhitelist = whitelist
+
+	if reflect.DeepEqual(h.c.Dynamic.HuggleUserWhitelist, whitelist) {
+		logger.Infof("Updating Huggle User Whitelist: %+v", whitelist)
+		h.c.Dynamic.HuggleUserWhitelist = whitelist
+	}
 }
 
 func NewHuggleConfiguration(c *Configuration, w *wikipedia.WikipediaApi, wg *sync.WaitGroup) *HuggleConfigurationInstance {

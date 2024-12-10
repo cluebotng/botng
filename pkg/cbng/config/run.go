@@ -1,8 +1,8 @@
 package config
 
 import (
+	"context"
 	"fmt"
-	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
 	"strings"
@@ -27,16 +27,19 @@ func (r *RunInstance) GetPageName() string {
 func (r *RunInstance) start(wg *sync.WaitGroup) {
 	logger := logrus.WithField("function", "config.RunInstance.start")
 	r.reload()
+
+	wg.Add(1)
 	go func(wg *sync.WaitGroup) {
-		wg.Add(1)
 		defer wg.Done()
+
+		timer := time.NewTicker(time.Minute)
 		for {
 			select {
-			case <-time.Tick(time.Duration(time.Minute)):
-				logger.Infof("Reloading From Timer")
+			case <-timer.C:
+				logger.Debugf("Reloading From Timer")
 				r.reload()
 			case <-r.reloadChan:
-				logger.Infof("Reloading From Trigger")
+				logger.Debugf("Reloading From Trigger")
 				r.reload()
 			}
 		}
@@ -45,17 +48,17 @@ func (r *RunInstance) start(wg *sync.WaitGroup) {
 
 func (r *RunInstance) reload() {
 	logger := logrus.WithField("function", "config.RunInstance.reload")
-	timer := helpers.NewTimeLogger("config.RunInstance.reload", map[string]interface{}{})
-	defer timer.Done()
 
-	revision := r.w.GetPage(logger, r.GetPageName())
+	revision := r.w.GetPage(logger, context.Background(), r.GetPageName())
 	if revision != nil {
 		shouldRun := false
 		if strings.Contains(strings.ToLower(revision.Data), "true") {
 			shouldRun = true
 		}
-		logger.Infof("Updated status to %v (%v)", shouldRun, revision.Data)
-		r.c.Dynamic.Run = shouldRun
+		if r.c.Dynamic.Run != shouldRun {
+			logger.Infof("Updating run status to %v (%v)", shouldRun, revision.Data)
+			r.c.Dynamic.Run = shouldRun
+		}
 	}
 }
 

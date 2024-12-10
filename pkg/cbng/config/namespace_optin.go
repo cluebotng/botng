@@ -1,10 +1,11 @@
 package config
 
 import (
+	"context"
 	"fmt"
-	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -28,16 +29,19 @@ func (n *NamespaceOptInInstance) GetPageName() string {
 func (n *NamespaceOptInInstance) start(wg *sync.WaitGroup) {
 	logger := logrus.WithField("function", "config.NamespaceOptInInstance.start")
 	n.reload()
+
+	wg.Add(1)
 	go func(wg *sync.WaitGroup) {
-		wg.Add(1)
 		defer wg.Done()
+
+		timer := time.NewTicker(time.Hour)
 		for {
 			select {
-			case <-time.Tick(time.Duration(time.Hour)):
-				logger.Infof("Reloading From Timer")
+			case <-timer.C:
+				logger.Debugf("Reloading From Timer")
 				n.reload()
 			case <-n.reloadChan:
-				logger.Infof("Reloading From Trigger")
+				logger.Debugf("Reloading From Trigger")
 				n.reload()
 			}
 		}
@@ -46,10 +50,8 @@ func (n *NamespaceOptInInstance) start(wg *sync.WaitGroup) {
 
 func (n *NamespaceOptInInstance) reload() {
 	logger := logrus.WithField("function", "config.NamespaceOptInInstance.reload")
-	timer := helpers.NewTimeLogger("config.NamespaceOptInInstance.reload", map[string]interface{}{})
-	defer timer.Done()
 
-	revision := n.w.GetPage(logger, n.GetPageName())
+	revision := n.w.GetPage(logger, context.Background(), n.GetPageName())
 	if revision != nil {
 		pages := []string{}
 		for _, line := range strings.Split(revision.Data, "\n") {
@@ -58,9 +60,11 @@ func (n *NamespaceOptInInstance) reload() {
 				pages = append(pages, m[0][1])
 			}
 		}
-		logger.Infof("Updated Namespace Opt-in pages")
-		logger.Debugf("Namespace Opt-in Pages Now: %+v", pages)
-		n.c.Dynamic.NamespaceOptIn = pages
+
+		if reflect.DeepEqual(n.c.Dynamic.NamespaceOptIn, pages) {
+			logger.Infof("Updating Namespace Opt-in pages to: %+v", pages)
+			n.c.Dynamic.NamespaceOptIn = pages
+		}
 	}
 }
 

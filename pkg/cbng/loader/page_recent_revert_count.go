@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"context"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
@@ -8,22 +9,22 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/cluebotng/botng/pkg/cbng/relay"
-	"github.com/honeycombio/libhoney-go"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"sync"
-	"time"
 )
 
-func loadSinglePageRecentRevertCount(logger *logrus.Entry, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, outChangeFeed chan *model.ProcessEvent) error {
-	timer := helpers.NewTimeLogger("loader.loadSinglePageRecentRevertCount", map[string]interface{}{})
-	defer timer.Done()
-
+func loadSinglePageRecentRevertCount(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, outChangeFeed chan *model.ProcessEvent) error {
 	// Load the page recent revert count
-	pageRecentRevertCount, err := db.Replica.GetPageRecentRevertCount(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.StartTime.Unix())
+	pageRecentRevertCount, err := db.Replica.GetPageRecentRevertCount(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix())
 	if err != nil {
+		metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_recent_reverts", "status": "failed"}).Inc()
 		return err
 	}
 
+	metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_recent_reverts", "status": "success"}).Inc()
 	change.Common.NumRecentRevisions = pageRecentRevertCount
 	outChangeFeed <- change
 	return nil
@@ -33,24 +34,19 @@ func LoadPageRecentRevertCount(wg *sync.WaitGroup, configuration *config.Configu
 	logger := logrus.WithField("function", "loader.LoadPageRecentRevertCount")
 	wg.Add(1)
 	defer wg.Done()
-	for {
-		select {
-		case change := <-inChangeFeed:
-			metrics.LoaderPageRecentRevertCountInUse.Inc()
-			startTime := time.Now()
-			ev := libhoney.NewEvent()
-			ev.AddField("cbng.function", "loader.loadSinglePageRecentRevertCount")
-			logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid, "change": change})
-			if err := loadSinglePageRecentRevertCount(logger, change, configuration, db, outChangeFeed); err != nil {
-				logger.Errorf(err.Error())
-				ev.AddField("error", err.Error())
-				r.SendDebug(fmt.Sprintf("%v # Failed to get page recent revert count", change.FormatIrcChange()))
-			}
-			ev.AddField("duration_ms", time.Since(startTime).Nanoseconds()/1000000)
-						if err := ev.Send(); err != nil {
-				logger.Warnf("Failed to send to honeycomb: %+v", err)
-			}
-			metrics.LoaderPageRecentRevertCountInUse.Dec()
+	for change := range inChangeFeed {
+		metrics.LoaderPageRecentRevertCountInUse.Inc()
+		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadPageRecentRevertCount")
+		span.SetAttributes(attribute.String("uuid", change.Uuid))
+
+		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
+		if err := loadSinglePageRecentRevertCount(logger, ctx, change, configuration, db, outChangeFeed); err != nil {
+			logger.Error(err.Error())
+			span.SetStatus(codes.Error, err.Error())
+			r.SendDebug(fmt.Sprintf("%v # Failed to get page recent revert count", change.FormatIrcChange()))
 		}
+
+		span.End()
+		metrics.LoaderPageRecentRevertCountInUse.Dec()
 	}
 }

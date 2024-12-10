@@ -17,55 +17,59 @@
 -- Table structure for table `beaten`
 --
 DROP TABLE IF EXISTS `beaten`;
-CREATE TABLE `beaten` (
-  `id` int(11) NOT NULL auto_increment,
-  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-  `article` varchar(256) NOT NULL,
-  `diff` varchar(512) NOT NULL,
-  `user` varchar(256) NOT NULL,
-  PRIMARY KEY  (`id`)
+CREATE TABLE `beaten`
+(
+    `id`        int(11) NOT NULL auto_increment,
+    `timestamp` timestamp    NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+    `article`   varchar(256) NOT NULL,
+    `diff`      varchar(512) NOT NULL,
+    `user`      varchar(256) NOT NULL,
+    PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 --
 -- Table structure for table `trr`
 --
 DROP TABLE IF EXISTS `trr`;
-CREATE TABLE `trr` (
-  `id` int(11) NOT NULL auto_increment,
-  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-  `user` varchar(256) NOT NULL,
-  `title` varchar(256) NOT NULL,
-  `url` varchar(512) NOT NULL,
-  `revid` int(11) NOT NULL,
-  `md5` char(32) default NULL,
-  PRIMARY KEY  (`id`)
+CREATE TABLE `trr`
+(
+    `id`        int(11) NOT NULL auto_increment,
+    `timestamp` timestamp    NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+    `user`      varchar(256) NOT NULL,
+    `title`     varchar(256) NOT NULL,
+    `url`       varchar(512) NOT NULL,
+    `revid`     int(11) NOT NULL,
+    `md5`       char(32)              default NULL,
+    PRIMARY KEY (`id`)
 ) ENGINE=MyISAM AUTO_INCREMENT=488749 DEFAULT CHARSET=latin1;
 --
 -- Table structure for table `vandalism`
 --
 DROP TABLE IF EXISTS `vandalism`;
-CREATE TABLE `vandalism` (
-  `id` int(11) NOT NULL auto_increment,
-  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-  `user` varchar(256) NOT NULL,
-  `article` varchar(256) NOT NULL,
-  `heuristic` varchar(64) NOT NULL,
-  `regex` varchar(2048) default NULL,
-  `reason` varchar(512) NOT NULL,
-  `diff` varchar(512) NOT NULL,
-  `old_id` int(11) NOT NULL,
-  `new_id` int(11) NOT NULL,
-  `reverted` tinyint(1) NOT NULL,
-  PRIMARY KEY  (`id`)
+CREATE TABLE `vandalism`
+(
+    `id`        int(11) NOT NULL auto_increment,
+    `timestamp` timestamp    NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+    `user`      varchar(256) NOT NULL,
+    `article`   varchar(256) NOT NULL,
+    `heuristic` varchar(64)  NOT NULL,
+    `regex`     varchar(2048)         default NULL,
+    `reason`    varchar(512) NOT NULL,
+    `diff`      varchar(512) NOT NULL,
+    `old_id`    int(11) NOT NULL,
+    `new_id`    int(11) NOT NULL,
+    `reverted`  tinyint(1) NOT NULL,
+    PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 --
 -- Table structure for table `cluster_node`
 --
 DROP TABLE IF EXISTS `cluster_node`;
-CREATE TABLE `cluster_node` (
-  `node` varchar(256) NOT NULL,
-  `port` int(11) NOT NULL,
-  `type` varchar(256) NOT NULL,
-  PRIMARY KEY  (`type`)
+CREATE TABLE `cluster_node`
+(
+    `node` varchar(256) NOT NULL,
+    `port` int(11) NOT NULL,
+    `type` varchar(256) NOT NULL,
+    PRIMARY KEY (`type`)
 ) ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=latin1;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

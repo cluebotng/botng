@@ -1,12 +1,15 @@
 package processor
 
 import (
-	"fmt"
+	"context"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"sync"
 	"time"
 )
@@ -17,46 +20,70 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 	defer wg.Done()
 
 	pending := map[string]*model.ProcessEvent{}
+	mutex := &sync.Mutex{}
 
+	timer := time.NewTicker(time.Second)
 	for {
 		select {
 		// Every second update the stats & process the pending queue
-		case <-time.Tick(time.Duration(time.Second)):
-			metrics.ReplicationEventsPending.Set(float64(len(pending)))
+		case <-timer.C:
+			if mutex.TryLock() {
+				func() {
+					defer mutex.Unlock()
+					ctx, span := metrics.OtelTracer.Start(context.Background(), "replication.ReplicationWatcher.timer")
+					defer span.End()
+					metrics.ReplicationWatcherPending.Set(float64(len(pending)))
 
-			metrics.ProcessorsReplicationWatcherInUse.Inc()
-			defer metrics.ProcessorsReplicationWatcherInUse.Dec()
+					metrics.ProcessorsReplicationWatcherInUse.Inc()
+					defer metrics.ProcessorsReplicationWatcherInUse.Dec()
 
-			var replicationPoint int64
-			if !ignoreReplicationDelay {
-				var err error
-				if replicationPoint, err = db.Replica.GetLatestChangeTimestamp(logger); err != nil {
-					logger.Warnf("Failed to get current replication point: %+v", err)
-					continue
-				}
-			}
+					var replicationPoint int64
+					if !ignoreReplicationDelay {
+						var err error
+						if replicationPoint, err = db.Replica.GetLatestChangeTimestamp(logger, ctx); err != nil {
+							logger.Warnf("Failed to get current replication point: %+v", err)
+							return
+						}
+					}
 
-			for _, change := range pending {
-				// If we're ignoring replication or are past the change in replication, kick off the process
-				if ignoreReplicationDelay || change.StartTime.Unix() >= replicationPoint {
-					logger.Debugf("Change %v past replication point %v while pending (%v)", change.Uuid, replicationPoint, ignoreReplicationDelay)
-					outChangeFeed <- change
-					delete(pending, change.Uuid)
-					continue
-				}
+					_, loopSpan := metrics.OtelTracer.Start(ctx, "replication.ReplicationWatcher.timer.pending")
+					defer loopSpan.End()
+					for _, change := range pending {
+						func() {
+							_, span := metrics.OtelTracer.Start(context.Background(), "replication.ReplicationWatcher.pending.change")
+							span.SetAttributes(attribute.String("uuid", change.Uuid))
+							defer span.End()
+							// If we're ignoring replication or are past the change in replication, kick off the process
+							if ignoreReplicationDelay || change.ReceivedTime.Unix() >= replicationPoint {
+								logger.Tracef("Change %v past replication point %v while pending (%v)", change.Uuid, replicationPoint, ignoreReplicationDelay)
+								metrics.EditStatus.With(prometheus.Labels{"state": "wait_for_replication", "status": "success"}).Inc()
+								metrics.ReplicationWatcherSuccess.Inc()
+								outChangeFeed <- change
+								delete(pending, change.Uuid)
+								return
+							}
 
-				// If we've waited 30 seconds, kill from pending
-				if time.Now().Unix()-30 > change.StartTime.Unix() {
-					logger.Warnf("Change %v expired while pending", change.Uuid)
-					delete(pending, change.Uuid)
-					continue
-				}
+							// If we've waited 2min, kill from pending
+							if time.Now().Unix()-120 > change.ReceivedTime.Unix() {
+								logger.WithFields(logrus.Fields{"uuid": change.Uuid}).Error("Change expired while pending")
+								span.SetStatus(codes.Error, "Timeout while waiting for replication")
+								metrics.EditStatus.With(prometheus.Labels{"state": "wait_for_replication", "status": "failed"}).Inc()
+								metrics.ReplicationWatcherTimout.Inc()
+								delete(pending, change.Uuid)
+								return
+							}
 
-				// Else... we're still in pending
-				logger.Debugf("Change %v still pending (%v < %v)", change.Uuid, change.StartTime.Unix(), replicationPoint)
+							// Else... we're still in pending
+							logger.Debugf("Change %v still pending (%v < %v)", change.Uuid, change.ReceivedTime.Unix(), replicationPoint)
+						}()
+					}
+				}()
 			}
 
 		case change := <-inChangeFeed:
+			_, span := metrics.OtelTracer.Start(context.Background(), "replication.ReplicationWatcher.loop")
+			span.SetAttributes(attribute.String("uuid", change.Uuid))
+
 			// Put the change feed into the pending map
 			pending[change.Uuid] = change
 
@@ -73,7 +100,7 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 			if change.Common.Title == configuration.Instances.TFA.GetPageName() {
 				configuration.Instances.TFA.TriggerReload()
 			}
+			span.End()
 		}
 	}
-	fmt.Printf("REPLICATION WATCHER DIED\n")
 }

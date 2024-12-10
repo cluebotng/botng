@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"context"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
@@ -8,29 +9,30 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/cluebotng/botng/pkg/cbng/relay"
-	"github.com/honeycombio/libhoney-go"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"sync"
-	"time"
 )
 
-func loadSinglePageMetadata(logger *logrus.Entry, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, outChangeFeed chan *model.ProcessEvent) error {
-	timer := helpers.NewTimeLogger("loader.loadSinglePageMetadata", map[string]interface{}{})
-	defer timer.Done()
+func loadSinglePageMetadata(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, outChangeFeed chan *model.ProcessEvent) error {
 
 	// Skip namespaces we're not interested in
 	if change.Common.NamespaceId != 0 && !helpers.StringItemInSlice(change.Common.Namespace, configuration.Dynamic.NamespaceOptIn) {
 		logger.Debugf("Skipping change due to namespace: %v (%v)", change.Common.Namespace, change.Common.NamespaceId)
-		metrics.ChangeEventSkipped.Inc()
+		metrics.EditStatus.With(prometheus.Labels{"state": "verify_namespace", "status": "skipped"}).Inc()
 		return nil
 	}
 
 	// Load the page created metadata
-	pageCreatedUser, pageCreatedTimestamp, err := db.Replica.GetPageCreatedTimeAndUser(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title))
+	pageCreatedUser, pageCreatedTimestamp, err := db.Replica.GetPageCreatedTimeAndUser(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title))
 	if err != nil {
+		metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_metadata", "status": "failed"}).Inc()
 		return err
 	}
 
+	metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_metadata", "status": "success"}).Inc()
 	change.Common.Creator = pageCreatedUser
 	change.Common.PageMadeTime = pageCreatedTimestamp
 	outChangeFeed <- change
@@ -42,23 +44,19 @@ func LoadPageMetadata(wg *sync.WaitGroup, configuration *config.Configuration, d
 	wg.Add(1)
 	defer wg.Done()
 	for {
-		select {
-		case change := <-inChangeFeed:
-			metrics.LoaderPageMetadataInUse.Inc()
-			startTime := time.Now()
-			ev := libhoney.NewEvent()
-			ev.AddField("cbng.function", "loader.loadSinglePageMetadata")
-			logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid, "change": change})
-			if err := loadSinglePageMetadata(logger, change, configuration, db, outChangeFeed); err != nil {
-				logger.Errorf(err.Error())
-				ev.AddField("error", err.Error())
-				r.SendDebug(fmt.Sprintf("%v # Failed to get page metadata", change.FormatIrcChange()))
-			}
-			ev.AddField("duration_ms", time.Since(startTime).Nanoseconds()/1000000)
-						if err := ev.Send(); err != nil {
-				logger.Warnf("Failed to send to honeycomb: %+v", err)
-			}
-			metrics.LoaderPageMetadataInUse.Dec()
+		change := <-inChangeFeed
+		metrics.LoaderPageMetadataInUse.Inc()
+		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadPageMetadata")
+		span.SetAttributes(attribute.String("uuid", change.Uuid))
+
+		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
+		if err := loadSinglePageMetadata(logger, ctx, change, configuration, db, outChangeFeed); err != nil {
+			logger.Error(err.Error())
+			span.SetStatus(codes.Error, err.Error())
+			r.SendDebug(fmt.Sprintf("%v # Failed to get page metadata", change.FormatIrcChange()))
 		}
+
+		span.End()
+		metrics.LoaderPageMetadataInUse.Dec()
 	}
 }

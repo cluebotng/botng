@@ -1,0 +1,37 @@
+bot:
+  owner: Cobi
+  friends:
+    - ClueBot
+    - DASHBotAV
+  run: false
+  angry: true
+
+wikipedia:
+  host: en.wikipedia.org
+  username: ClueBot_NG
+  owner: NaomiAmethyst
+
+irc:
+  server: irc.freenode.org
+  port: 6697
+  username: CBNGRelay-CI
+  channel:
+    spam: wikipedia-en-cbngfeed-ci
+    revert: wikipedia-en-cbngrevertfeed-ci
+    debug: wikipedia-en-cbngdebug-ci
+
+sql:
+  replica:
+    host: 127.0.0.1
+    port: 3306
+    schema: enwiki_p
+    username: root
+  cluebot:
+    host: 127.0.0.1
+    port: 3306
+    schema: cbng
+    username: root
+
+core:
+  host: 127.0.0.1
+  port: 3565

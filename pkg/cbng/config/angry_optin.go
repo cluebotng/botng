@@ -1,10 +1,11 @@
 package config
 
 import (
+	"context"
 	"fmt"
-	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -28,16 +29,19 @@ func (a *AngryOptInConfigurationInstance) GetPageName() string {
 func (a *AngryOptInConfigurationInstance) start(wg *sync.WaitGroup) {
 	logger := logrus.WithField("function", "config.AngryOptInConfigurationInstance.start")
 	a.reload()
+
+	wg.Add(1)
 	go func(wg *sync.WaitGroup) {
-		wg.Add(1)
 		defer wg.Done()
+
+		timer := time.NewTicker(time.Hour)
 		for {
 			select {
-			case <-time.Tick(time.Duration(time.Hour)):
-				logger.Infof("Reloading From Timer")
+			case <-timer.C:
+				logger.Debugf("Reloading From Timer")
 				a.reload()
 			case <-a.reloadChan:
-				logger.Infof("Reloading From Trigger")
+				logger.Debugf("Reloading From Trigger")
 				a.reload()
 			}
 		}
@@ -46,10 +50,8 @@ func (a *AngryOptInConfigurationInstance) start(wg *sync.WaitGroup) {
 
 func (a *AngryOptInConfigurationInstance) reload() {
 	logger := logrus.WithField("function", "config.AngryOptInConfigurationInstance.reload")
-	timer := helpers.NewTimeLogger("config.AngryOptInConfigurationInstance.reload", map[string]interface{}{})
-	defer timer.Done()
 
-	revision := a.w.GetPage(logger, a.GetPageName())
+	revision := a.w.GetPage(logger, context.Background(), a.GetPageName())
 	if revision != nil {
 		pages := []string{}
 		for _, line := range strings.Split(revision.Data, "\n") {
@@ -57,12 +59,14 @@ func (a *AngryOptInConfigurationInstance) reload() {
 			if len(m) == 1 {
 				pages = append(pages, m[0][1])
 			} else {
-				logger.Debugf("Ignoring angry option line: '%v'", line)
+				logger.Tracef("Ignoring angry option line: '%v'", line)
 			}
 		}
-		logger.Infof("Updated Angry Opt-in pages")
-		logger.Debugf("Angry Opt-in Pages Now: %+v", pages)
-		a.c.Dynamic.AngryOptinPages = pages
+
+		if reflect.DeepEqual(a.c.Dynamic.AngryOptinPages, pages) {
+			logger.Infof("Updating Angry Opt-in pages to: %+v", pages)
+			a.c.Dynamic.AngryOptinPages = pages
+		}
 	}
 }
 

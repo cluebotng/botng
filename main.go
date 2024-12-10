@@ -11,8 +11,8 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/processor"
 	"github.com/cluebotng/botng/pkg/cbng/relay"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
-	"github.com/honeycombio/libhoney-go"
-	"github.com/honeycombio/libhoney-go/transmission"
+	"github.com/honeycombio/otel-config-go/otelconfig"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
@@ -22,11 +22,12 @@ import (
 	"time"
 )
 
-func RunMetricPoller(wg *sync.WaitGroup, toReplicationWatcher, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toTriggerProcessor, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays) {
+func RunMetricPoller(wg *sync.WaitGroup, toReplicationWatcher, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays) {
 	wg.Add(1)
 	defer wg.Done()
-	for range time.Tick(time.Duration(time.Second)) {
-		metrics.PendingReplicationWatcher.Set(float64(len(toReplicationWatcher)))
+
+	timer := time.NewTicker(time.Second)
+	for range timer.C {
 		metrics.PendingPageMetadataLoader.Set(float64(len(toPageMetadataLoader)))
 		metrics.PendingPageRecentEditCountLoader.Set(float64(len(toPageRecentEditCountLoader)))
 		metrics.PendingPageRecentRevertCountLoader.Set(float64(len(toPageRecentRevertCountLoader)))
@@ -34,12 +35,12 @@ func RunMetricPoller(wg *sync.WaitGroup, toReplicationWatcher, toPageMetadataLoa
 		metrics.PendingUserWarnsCountLoader.Set(float64(len(toUserWarnsCountLoader)))
 		metrics.PendingUserDistinctPagesCountLoader.Set(float64(len(toUserDistinctPagesCountLoader)))
 		metrics.PendingRevisionLoader.Set(float64(len(toRevisionLoader)))
-		metrics.PendingTriggerProcessor.Set(float64(len(toTriggerProcessor)))
 		metrics.PendingScoringProcessor.Set(float64(len(toScoringProcessor)))
 		metrics.PendingRevertProcessor.Set(float64(len(toRevertProcessor)))
-		metrics.PendingIrcSpamNotifications.Set(float64(r.GetPendingSpamMessages()))
-		metrics.PendingIrcDebugNotifications.Set(float64(r.GetPendingDebugMessages()))
-		metrics.PendingIrcRevertNotifications.Set(float64(r.GetPendingRevertMessages()))
+
+		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "debug"}).Set(float64(r.GetPendingDebugMessages()))
+		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "revert"}).Set(float64(r.GetPendingRevertMessages()))
+		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "spam"}).Set(float64(r.GetPendingSpamMessages()))
 	}
 }
 
@@ -57,9 +58,9 @@ func main() {
 	pflag.BoolVar(&traceLogging, "trace", false, "Should we log trace info")
 	pflag.BoolVar(&useIrcRelay, "irc-relay", false, "Should we use enable the IRC relay")
 	pflag.BoolVar(&ignoreReplicationDelay, "no-replication-check", false, "Should we disable the replication monitoring")
-	pflag.IntVar(&processors, "processors", 500, "Number of processors to use")
-	pflag.IntVar(&sqlLoaders, "sql-loaders", 10, "Number of SQL loaders to use")
-	pflag.IntVar(&httpLoaders, "http-loaders", 100, "Number of HTTP loaders to use")
+	pflag.IntVar(&processors, "processors", 20, "Number of processors to use")
+	pflag.IntVar(&sqlLoaders, "sql-loaders", 150, "Number of SQL loaders to use")
+	pflag.IntVar(&httpLoaders, "http-loaders", 150, "Number of HTTP loaders to use")
 	pflag.Parse()
 
 	if traceLogging {
@@ -88,26 +89,43 @@ func main() {
 
 	configuration := config.NewConfiguration()
 
-	honeyConfig := libhoney.Config{
-		WriteKey: configuration.Honey.Key,
-		Dataset:  "ClueBot NG",
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		http.Handle("/metrics", promhttp.Handler())
+		if err := http.ListenAndServe(":8118", nil); err != nil {
+			logrus.Fatalf("failed to serve metrics: %s", err)
+		}
+	}()
+
+	var otelOptions = []otelconfig.Option{
+		otelconfig.WithServiceName("ClueBot NG"),
 	}
-	if configuration.Honey.Key == "" {
-		honeyConfig.Transmission = &transmission.DiscardSender{}
+	if configuration.Honey.Key != "" {
+		otelOptions = append(otelOptions, otelconfig.WithExporterProtocol(otelconfig.ProtocolHTTPProto))
+		otelOptions = append(otelOptions, otelconfig.WithExporterEndpoint("https://api.honeycomb.io"))
+		otelOptions = append(otelOptions, otelconfig.WithHeaders(map[string]string{
+			"x-honeycomb-team": configuration.Honey.Key,
+		}))
+	} else {
+		otelOptions = append(otelOptions, otelconfig.WithTracesEnabled(false))
+		otelOptions = append(otelOptions, otelconfig.WithMetricsEnabled(false))
 	}
 
-	if err := libhoney.Init(honeyConfig); err != nil {
-		logrus.Fatalf("Failed to init honeycomb: %v", err)
+	otelShutdown, err := otelconfig.ConfigureOpenTelemetry(otelOptions...)
+	if err != nil {
+		logrus.Fatalf("failed to init OTel SDK: %e", err)
 	}
-	defer libhoney.Close()
+	defer otelShutdown()
 
-	api := wikipedia.NewWikipediaApi(configuration.Wikipedia.Username, configuration.Wikipedia.Password)
+	api := wikipedia.NewWikipediaApi(
+		configuration.Wikipedia.Username,
+		configuration.Wikipedia.Password,
+		configuration.Bot.ReadOnly,
+	)
 	configuration.LoadDynamic(&wg, api)
 
-	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(":8118", nil)
-
-	r := relay.NewRelays(&wg, useIrcRelay, configuration.Irc.Relay.Server, configuration.Irc.Relay.Port, configuration.Irc.Relay.Username, configuration.Irc.Relay.Password, configuration.Irc.Relay.Channel)
+	r := relay.NewRelays(&wg, useIrcRelay, configuration.Irc.Server, configuration.Irc.Port, configuration.Irc.Username, configuration.Irc.Password, configuration.Irc.Channel)
 	db := database.NewDatabaseConnection(configuration)
 
 	// Processing channels
@@ -120,11 +138,10 @@ func main() {
 	toUserDistinctPagesCountLoader := make(chan *model.ProcessEvent, 10000)
 	toRevisionLoader := make(chan *model.ProcessEvent, 10000)
 
-	toTriggerProcessor := make(chan *model.ProcessEvent, 10000)
 	toScoringProcessor := make(chan *model.ProcessEvent, 10000)
 	toRevertProcessor := make(chan *model.ProcessEvent, 10000)
 
-	go RunMetricPoller(&wg, toReplicationWatcher, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toTriggerProcessor, toScoringProcessor, toRevertProcessor, r)
+	go RunMetricPoller(&wg, toReplicationWatcher, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r)
 
 	go feed.ConsumeHttpChangeEvents(&wg, configuration, toReplicationWatcher)
 	go processor.ReplicationWatcher(&wg, configuration, db, ignoreReplicationDelay, toReplicationWatcher, toPageMetadataLoader)
@@ -143,7 +160,6 @@ func main() {
 	}
 
 	for i := 0; i < processors; i++ {
-		go processor.ProcessTriggerChangeEvents(&wg, configuration, toTriggerProcessor, toPageMetadataLoader)
 		go processor.ProcessScoringChangeEvents(&wg, configuration, db, r, toScoringProcessor, toRevertProcessor)
 		go processor.ProcessRevertChangeEvents(&wg, configuration, db, r, api, toRevertProcessor)
 	}
