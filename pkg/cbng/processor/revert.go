@@ -246,7 +246,7 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 
 	// If we reverted this user/page before in the last 24 hours, don't
 	lastRevertTime := db.ClueBot.GetLastRevertTime(logger, ctx, change.Common.Title, change.User.Username)
-	if lastRevertTime != 0 && lastRevertTime < 86400 {
+	if lastRevertTime != 0 && lastRevertTime > time.Now().UTC().Unix()-86400 {
 		change.RevertReason = "Reverted before"
 		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "recent_revert"}).Inc()
 		return false
@@ -276,6 +276,11 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 	}
 	logger.Infof("Generated vandalism id %v", mysqlVandalismId)
 
+	// Log the revert time for later
+	if err := db.ClueBot.SaveRevertTime(logger, ctx, change.Common.Title, change.User.Username); err != nil {
+		logger.Warnf("Failed to save revert time: %v", err)
+	}
+
 	// Revert or not
 	if !shouldRevert(logger, ctx, configuration, db, change) {
 		metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "skipped"}).Inc()
@@ -294,15 +299,21 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 		r.SendRevert(fmt.Sprintf("%s (Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ReceivedTime.Unix()))
 		r.SendSpam(fmt.Sprintf("%s # %f # %s # Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
 	} else {
-		metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "failed"}).Inc()
 		logger.Infof("Failed to revert")
 		revision := api.GetPage(logger, ctx, helpers.PageTitle(change.Common.Namespace, change.Common.Title))
-		if revision != nil && change.User.Username != revision.User {
-			change.RevertReason = fmt.Sprintf("Beaten by %s", revision.User)
-			db.ClueBot.MarkVandalismRevertBeaten(logger, ctx, mysqlVandalismId, change.Common.Title, change.GetDiffUrl(), revision.User)
+		if revision != nil {
+			if change.User.Username == revision.User {
+				metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "self_beaten"}).Inc()
+			} else {
+				metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "beaten"}).Inc()
+				change.RevertReason = fmt.Sprintf("Beaten by %s", revision.User)
+				db.ClueBot.MarkVandalismRevertBeaten(logger, ctx, mysqlVandalismId, change.Common.Title, change.GetDiffUrl(), revision.User)
 
-			r.SendRevert(fmt.Sprintf("%s (Not Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ReceivedTime.Unix()))
-			r.SendSpam(fmt.Sprintf("%s # %f # %s # Not Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
+				r.SendRevert(fmt.Sprintf("%s (Not Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ReceivedTime.Unix()))
+				r.SendSpam(fmt.Sprintf("%s # %f # %s # Not Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
+			}
+		} else {
+			metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "failed"}).Inc()
 		}
 	}
 	return nil

@@ -175,7 +175,7 @@ func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, ctx context.Contex
 	return revertTime
 }
 
-func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, title, user string) int64 {
+func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, title, user string) error {
 	logger := l.WithFields(logrus.Fields{
 		"function": "database.cluebot.SaveRevertTime",
 		"args": map[string]interface{}{
@@ -195,6 +195,7 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 	if err != nil {
 		logger.Infof("Error running query: %v", err)
 		span.SetStatus(codes.Error, err.Error())
+		return err
 	} else {
 		defer rows.Close()
 		if !rows.Next() {
@@ -203,9 +204,10 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 			if err := rows.Scan(&revertTime); err != nil {
 				logger.Errorf("Error reading rows for query: %v", err)
 				span.SetStatus(codes.Error, err.Error())
+				return err
 			}
 		}
 	}
 
-	return revertTime
+	return nil
 }
