@@ -246,7 +246,7 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 
 	// If we reverted this user/page before in the last 24 hours, don't
 	lastRevertTime := db.ClueBot.GetLastRevertTime(logger, ctx, change.Common.Title, change.User.Username)
-	if lastRevertTime != 0 && lastRevertTime > time.Now().UTC().Unix()-86400 {
+	if lastRevertTime != 0 && lastRevertTime > time.Now().UTC().Unix()-config.RecentRevertThreshold {
 		change.RevertReason = "Reverted before"
 		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "recent_revert"}).Inc()
 		return false

@@ -9,6 +9,7 @@ import (
 )
 
 var ReleaseTag = "development"
+var RecentRevertThreshold = int64(86400)
 
 type BotConfiguration struct {
 	Owner    string

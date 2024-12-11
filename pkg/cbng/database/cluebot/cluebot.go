@@ -211,3 +211,20 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 
 	return nil
 }
+
+func (ci *CluebotInstance) PurgeOldRevertTimes() {
+	logger := logrus.WithFields(logrus.Fields{
+		"function": "database.cluebot.PurgeOldRevertTimes",
+	})
+	_, span := metrics.OtelTracer.Start(context.Background(), "database.cluebot.PurgeOldRevertTimes")
+	defer span.End()
+
+	db := ci.getDatabaseConnection()
+	defer db.Close()
+
+	_, err := db.Exec("DELETE FROM `last_revert` WHERE `time` < ?", time.Now().UTC().Unix()-(config.RecentRevertThreshold+10))
+	if err != nil {
+		logger.Warnf("Error purging database: %v", err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+}

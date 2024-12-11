@@ -26,10 +26,8 @@ CREATE TABLE IF NOT EXISTS `vandalism`
 
 CREATE TABLE IF NOT EXISTS `last_revert`
 (
-    `id`    int(11)      NOT NULL auto_increment,
     `title` varchar(256) NOT NULL,
     `user`  varchar(256) NOT NULL,
     `time`  int          NOT NULL,
-    PRIMARY KEY (`id`),
-    INDEX (`title`, `user`)
+    PRIMARY KEY (`title`, `user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;

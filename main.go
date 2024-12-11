@@ -47,6 +47,16 @@ func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditC
 	}
 }
 
+func RunDatabasePurger(wg *sync.WaitGroup, db *database.DatabaseConnection) {
+	wg.Add(1)
+	defer wg.Done()
+
+	timer := time.NewTicker(time.Hour)
+	for range timer.C {
+		db.ClueBot.PurgeOldRevertTimes()
+	}
+}
+
 func main() {
 	var wg sync.WaitGroup
 	var debugLogging bool
@@ -151,6 +161,7 @@ func main() {
 	toRevertProcessor := make(chan *model.ProcessEvent, 10000)
 
 	go RunMetricPoller(&wg, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r, db)
+	go RunDatabasePurger(&wg, db)
 
 	go feed.ConsumeHttpChangeEvents(&wg, configuration, toReplicationWatcher)
 	go processor.ReplicationWatcher(&wg, configuration, db, ignoreReplicationDelay, toReplicationWatcher, toPageMetadataLoader)
