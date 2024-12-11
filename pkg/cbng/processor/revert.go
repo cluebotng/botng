@@ -52,12 +52,13 @@ func revertChange(l *logrus.Entry, parentCtx context.Context, api *wikipedia.Wik
 	revComment := "older version"
 	if revertRevision.Id != 0 {
 		metrics.RevertStatus.With(prometheus.Labels{"state": "revert", "status": "failed", "meta": "revision_is_old"}).Inc()
-		revComment = fmt.Sprintf("version by %+v", revertRevision.User)
+		revComment = fmt.Sprintf("version by %s", revertRevision.User)
 	}
 
-	comment := fmt.Sprintf("Reverting possible vandalism by [[Special:Contribs/%+v|%+v]] to %+v. [[WP:CBFP|Report False Positive?]] Thanks, [[WP:CBNG|%+v]]. (%v) (Bot)",
-		change.User, change.User,
+	comment := fmt.Sprintf("Reverting possible vandalism by [[Special:Contribs/%s|%s]] to %s. [[WP:CBFP|Report False Positive?]] Thanks, [[WP:%s|%s]]. (%d) (Bot)",
+		change.User.Username, change.User.Username,
 		revComment,
+		configuration.Wikipedia.Username,
 		configuration.Wikipedia.Username,
 		mysqlVandalismId,
 	)
@@ -221,7 +222,7 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 			metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "high_edit_count"}).Inc()
 			return false
 		}
-		logger.Infof("Found user edit count, but high warns (%+v)", userWarnRatio)
+		logger.Infof("Found user edit count, but high warns (%f)", userWarnRatio)
 		change.RevertReason = "User has edit count, but warns > 10%"
 		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "success", "meta": "edit_count_warn_perc"}).Inc()
 		return true
@@ -265,7 +266,7 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 		ctx,
 		change.User.Username,
 		change.Common.Title,
-		fmt.Sprintf("ANN scored at %+v", change.VandalismScore),
+		fmt.Sprintf("ANN scored at %f", change.VandalismScore),
 		change.GetDiffUrl(),
 		change.Previous.Id,
 		change.Current.Id)
