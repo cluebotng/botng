@@ -41,8 +41,6 @@ func (ci *CluebotInstance) GenerateVandalismId(logger *logrus.Entry, ctx context
 	_, span := metrics.OtelTracer.Start(ctx, "database.cluebot.GenerateVandalismId")
 	defer span.End()
 
-	var vandalismId int64
-
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
@@ -50,12 +48,14 @@ func (ci *CluebotInstance) GenerateVandalismId(logger *logrus.Entry, ctx context
 	if err != nil {
 		logger.Errorf("Error running query: %v", err)
 		span.SetStatus(codes.Error, err.Error())
-		return vandalismId, err
+		return 0, err
 	}
-	if vandalismId, err := res.LastInsertId(); err != nil {
+
+	vandalismId, err := res.LastInsertId()
+	if err != nil {
 		logger.Errorf("Failed to get insert id: %v", err)
 		span.SetStatus(codes.Error, err.Error())
-		return vandalismId, err
+		return 0, err
 	}
 
 	logger.Debugf("Generated id %v", vandalismId)

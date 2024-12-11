@@ -453,21 +453,11 @@ func (w *WikipediaApi) GetWarningLevel(l *logrus.Entry, parentCtx context.Contex
 	matches := regexp.MustCompile(`<!-- Template:uw-[a-z]*(\d)(im)? -->.*(\d{2}:\d{2}, \d+ [a-zA-Z]+ \d{4} \(UTC\))`).FindAllStringSubmatch(page.Data, -1)
 	level := 0
 	for _, match := range matches {
-		mlevel, err := strconv.Atoi(match[1])
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			logger.Warnf("Failed to parse '%v' into int: %v", match[1], err)
-			continue
-		}
-		if match[2] != "" {
-			t, err := time.Parse("15:04, 02 January 2006 (MST)", match[2])
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				logger.Warnf("Failed to parse '%v' into time: %v", match[2], err)
-				continue
-			}
-			if mlevel > level && t.Second() <= (2*24*60*60) {
-				level = mlevel
+		if matchLevel, err := strconv.Atoi(match[1]); err == nil {
+			if t, err := time.Parse("15:04, 02 January 2006 (MST)", match[2]); err == nil {
+				if matchLevel > level && t.Second() <= (2*24*60*60) {
+					level = matchLevel
+				}
 			}
 		}
 	}
