@@ -20,6 +20,7 @@ type ProcessEventRevision struct {
 	Timestamp int64
 	Text      string `json:"-"`
 	Id        int64
+	Username  string
 }
 
 type ProcessEventUser struct {
@@ -34,12 +35,9 @@ type ProcessEvent struct {
 	Uuid           string
 	ReceivedTime   time.Time
 	Attempts       int32
-	EditType       string
-	EditId         int64
 	User           ProcessEventUser
 	Comment        string
 	Length         int64
-	PreviousUser   string
 	Common         ProcessEventCommon
 	Current        ProcessEventRevision
 	Previous       ProcessEventRevision

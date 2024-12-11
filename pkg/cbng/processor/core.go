@@ -48,14 +48,14 @@ func generateXML(pe *model.ProcessEvent) ([]byte, error) {
 
 	data := WPEditSet{
 		WPEdit: WPEdit{
-			EditType:               pe.EditType,
-			EditId:                 pe.EditId,
+			EditType:               "change",
+			EditId:                 pe.Current.Id,
 			Comment:                pe.Comment,
 			User:                   pe.User.Username,
 			UserEditCount:          pe.User.EditCount,
 			UserDistinctPagesCount: pe.User.DistinctPages,
 			UserWarningsCount:      pe.User.Warns,
-			PreviousUser:           pe.PreviousUser,
+			PreviousUser:           pe.Previous.Username,
 			UserRegistrationTime:   pe.User.RegistrationTime,
 			Common: WPEditCommon{
 				PageMadeTime:         pe.Common.PageMadeTime,
@@ -68,6 +68,10 @@ func generateXML(pe *model.ProcessEvent) ([]byte, error) {
 			Current: WPEditRevision{
 				Text:      pe.Current.Text,
 				Timestamp: pe.Current.Timestamp,
+			},
+			Previous: WPEditRevision{
+				Text:      pe.Previous.Text,
+				Timestamp: pe.Previous.Timestamp,
 			},
 		},
 	}
@@ -93,6 +97,7 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 		return false, err
 	}
 	XmlSpan.End()
+	logger = logger.WithField("request", XmlSpan)
 
 	_, scoreSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score")
 	defer scoreSpan.End()

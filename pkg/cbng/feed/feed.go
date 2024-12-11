@@ -61,11 +61,17 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 		if httpChange.Type == "edit" && httpChange.ServerName == configuration.Wikipedia.Host {
 			_, emitterSpan := metrics.OtelTracer.Start(rootCtx, "feed.ConsumeHttpChangeEvents.event.emit")
 			defer emitterSpan.End()
+
+			namespace := strings.TrimRight(httpChange.Namespace, ":")
+			if namespace == "" {
+				namespace = "main"
+			}
+
 			change := model.ProcessEvent{
 				Uuid:         rootUUID,
 				ReceivedTime: time.Now().UTC(),
 				Common: model.ProcessEventCommon{
-					Namespace:   strings.TrimRight(httpChange.Namespace, ":"),
+					Namespace:   namespace,
 					NamespaceId: httpChange.NamespaceId,
 					Title:       httpChange.Title,
 				},

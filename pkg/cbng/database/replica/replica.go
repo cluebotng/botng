@@ -101,7 +101,7 @@ func (ri *ReplicaInstance) GetPageCreatedTimeAndUser(l *logrus.Entry, ctx contex
 		return user, timestamp, err
 	}
 
-	logger.Debugf("Found user '%v', timestamp '%v'", user, timestamp)
+	logger.Debugf("Found creator %v @ %v", user, timestamp)
 	return user, timestamp, nil
 }
 
@@ -300,7 +300,7 @@ func (ri *ReplicaInstance) GetUserRegistrationTime(l *logrus.Entry, parentCtx co
 			}
 		}
 	}
-	logger.Debugf("Found registration time '%v'", registrationTime)
+	logger.Debugf("Found registration time: %v", registrationTime)
 	return registrationTime, nil
 }
 
