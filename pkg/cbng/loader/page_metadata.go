@@ -20,7 +20,7 @@ func loadSinglePageMetadata(logger *logrus.Entry, ctx context.Context, change *m
 
 	// Skip namespaces we're not interested in
 	if change.Common.NamespaceId != 0 && !helpers.StringItemInSlice(change.Common.Namespace, configuration.Dynamic.NamespaceOptIn) {
-		logger.Debugf("Skipping change due to namespace: %v (%v)", change.Common.Namespace, change.Common.NamespaceId)
+		logger.Debugf("Skipping change due to namespace: %s (%d)", change.Common.Namespace, change.Common.NamespaceId)
 		metrics.EditStatus.With(prometheus.Labels{"state": "verify_namespace", "status": "skipped"}).Inc()
 		return nil
 	}

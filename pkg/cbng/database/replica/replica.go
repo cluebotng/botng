@@ -34,7 +34,7 @@ func NewReplicaInstance(configuration *config.Configuration) *ReplicaInstance {
 		}
 		db.SetConnMaxLifetime(time.Minute * 5)
 		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(10)
+		db.SetMaxIdleConns(0)
 
 		if err := db.Ping(); err != nil {
 			logger.Warnf("Could not use connection to MySQL: %v", err)
@@ -79,7 +79,8 @@ func (ri *ReplicaInstance) GetPageCreatedTimeAndUser(l *logrus.Entry, ctx contex
 
 	var timestamp int64
 	var user string
-	rows, err := ri.getHandle().Query("SELECT `rev_timestamp`, `actor_name` FROM `page` "+
+	rows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+		"SELECT `rev_timestamp`, `actor_name` FROM `page` "+
 		"JOIN `revision` ON `rev_page` = `page_id` "+
 		"JOIN `actor` ON `actor_id` = `rev_actor` "+
 		"WHERE `page_namespace` = ? AND `page_title` = ? "+
@@ -117,7 +118,8 @@ func (ri *ReplicaInstance) GetPageRecentEditCount(l *logrus.Entry, ctx context.C
 	defer span.End()
 
 	var recentEditCount int64
-	rows, err := ri.getHandle().Query("SELECT COUNT(*) as count FROM `page` "+
+	rows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+		"SELECT COUNT(*) as count FROM `page` "+
 		"JOIN `revision` ON `rev_page` = `page_id` "+
 		"WHERE `page_namespace` = ? AND `page_title` = ? AND `rev_timestamp` > ?", namespaceId, title, timestamp)
 
@@ -155,7 +157,8 @@ func (ri *ReplicaInstance) GetPageRecentRevertCount(l *logrus.Entry, ctx context
 	defer span.End()
 
 	var recentRevertCount int64
-	rows, err := ri.getHandle().Query("SELECT COUNT(*) as count FROM `page` "+
+	rows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+		"SELECT COUNT(*) as count FROM `page` "+
 		"JOIN `revision` ON `rev_page` = `page_id` "+
 		"JOIN `comment` ON `comment_id` = `rev_comment_id` "+
 		"WHERE `page_namespace` = ? AND `page_title` = ? AND `rev_timestamp` > ? AND `comment_text` "+
@@ -198,7 +201,8 @@ func (ri *ReplicaInstance) GetUserEditCount(l *logrus.Entry, parentCtx context.C
 		defer span.End()
 
 		logger.Debugf("Querying revision_userindex for anonymous user")
-		rows, err := ri.getHandle().Query("SELECT COUNT(*) AS `user_editcount` FROM `revision_userindex` "+
+		rows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+			"SELECT COUNT(*) AS `user_editcount` FROM `revision_userindex` "+
 			"WHERE `rev_actor` = "+
 			"(SELECT actor_id FROM actor WHERE `actor_name` = ?)", user)
 		if err != nil {
@@ -221,8 +225,9 @@ func (ri *ReplicaInstance) GetUserEditCount(l *logrus.Entry, parentCtx context.C
 		defer span.End()
 
 		logger.Debugf("Querying user_editcount for user")
-		userCountRows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=1 "+
-			"FOR SELECT `user_editcount` FROM `user` WHERE `user_name` = ?", user)
+		userCountRows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+			"SET STATEMENT max_statement_time=10 FOR "+
+			"SELECT `user_editcount` FROM `user` WHERE `user_name` = ?", user)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return editCount, err
@@ -257,7 +262,8 @@ func (ri *ReplicaInstance) GetUserRegistrationTime(l *logrus.Entry, parentCtx co
 	// Anon users have no registration time so are a noop
 	if net.ParseIP(user) == nil {
 		logger.Debugf("Using registered lookup")
-		userRegRows, err := ri.getHandle().Query("SELECT `user_registration` FROM `user` WHERE `user_name` = ? AND `user_registration` is not NULL", user)
+		userRegRows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+			"SELECT `user_registration` FROM `user` WHERE `user_name` = ? AND `user_registration` is not NULL", user)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return registrationTime, err
@@ -273,7 +279,8 @@ func (ri *ReplicaInstance) GetUserRegistrationTime(l *logrus.Entry, parentCtx co
 			_, subSpan := metrics.OtelTracer.Start(ctx, "database.replica.ReplicaInstance.GetUserRegistrationTime.fallback")
 			defer subSpan.End()
 			logger.Debugf("Querying (fallback) revision_userindex for registered user")
-			userRevRows, err := ri.getHandle().Query("SELECT `rev_timestamp` FROM `revision_userindex` WHERE `rev_actor` = "+
+			userRevRows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+				"SELECT `rev_timestamp` FROM `revision_userindex` WHERE `rev_actor` = "+
 				"(SELECT actor_id FROM actor WHERE `actor_name` = ?) "+
 				" ORDER BY `rev_timestamp` LIMIT 0,1", user)
 			if err != nil {
@@ -308,7 +315,8 @@ func (ri *ReplicaInstance) GetUserWarnCount(l *logrus.Entry, ctx context.Context
 	defer span.End()
 
 	var warningCount int64
-	rows, err := ri.getHandle().Query("SELECT COUNT(*) as count FROM `page` "+
+	rows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+		"SELECT COUNT(*) as count FROM `page` "+
 		"JOIN `revision` ON `rev_page` = `page_id` "+
 		"JOIN `comment` ON `comment_id` = `rev_comment_id` "+
 		"WHERE `page_namespace` = 3 AND `page_title` = ? AND "+
@@ -345,7 +353,8 @@ func (ri *ReplicaInstance) GetUserDistinctPagesCount(l *logrus.Entry, ctx contex
 	defer span.End()
 
 	var distinctPageCount int64
-	rows, err := ri.getHandle().Query("SELECT COUNT(DISTINCT rev_page) AS count FROM `revision_userindex` WHERE `rev_actor` = "+
+	rows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR "+
+		"SELECT COUNT(DISTINCT rev_page) AS count FROM `revision_userindex` WHERE `rev_actor` = "+
 		"(SELECT actor_id FROM actor WHERE `actor_name` = ?)", strings.ReplaceAll(user, " ", "_"))
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
@@ -372,7 +381,8 @@ func (ri *ReplicaInstance) GetLatestChangeTimestamp(l *logrus.Entry, ctx context
 	defer span.End()
 
 	var replicationDelay []uint8
-	rows, err := ri.getHandle().Query("SELECT UNIX_TIMESTAMP(MAX(rc_timestamp)) FROM `recentchanges`")
+	rows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR " +
+		"SELECT UNIX_TIMESTAMP(MAX(rc_timestamp)) FROM `recentchanges`")
 	if err != nil {
 		logger.Errorf("Failed to query replication delay: %+v", err)
 		span.SetStatus(codes.Error, err.Error())

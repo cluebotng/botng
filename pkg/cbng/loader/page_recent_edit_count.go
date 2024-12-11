@@ -19,7 +19,7 @@ import (
 func loadSinglePageRecentEditCount(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, outChangeFeed chan *model.ProcessEvent) error {
 
 	// Load the page recent edit count
-	pageRecentEditCount, err := db.Replica.GetPageRecentEditCount(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix())
+	pageRecentEditCount, err := db.Replica.GetPageRecentEditCount(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix()-14*86400)
 	if err != nil {
 		metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_recent_edits", "status": "failed"}).Inc()
 		return err

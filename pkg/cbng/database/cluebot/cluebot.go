@@ -153,13 +153,10 @@ func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, ctx context.Contex
 	defer span.End()
 
 	var revertTime int64
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
-	defer cancel()
-
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
-	rows, err := db.QueryContext(timeoutCtx, "SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
+	rows, err := db.Query("SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
 	if err != nil {
 		logger.Infof("Error running query: %v", err)
 		span.SetStatus(codes.Error, err.Error())
@@ -190,13 +187,10 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 	defer span.End()
 
 	var revertTime int64
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
-	defer cancel()
-
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
-	rows, err := db.QueryContext(timeoutCtx, "INSERT INTO `last_revert` (`title`, `user`, `time`) "+
+	rows, err := db.Query("INSERT INTO `last_revert` (`title`, `user`, `time`) "+
 		"VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `time`=`time`", title, user, time.Now().UTC().Unix())
 	if err != nil {
 		logger.Infof("Error running query: %v", err)
