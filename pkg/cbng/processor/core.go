@@ -97,7 +97,7 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 		return false, err
 	}
 	XmlSpan.End()
-	logger = logger.WithField("request", XmlSpan)
+	logger = logger.WithField("request", xmlData)
 
 	_, scoreSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score")
 	defer scoreSpan.End()
