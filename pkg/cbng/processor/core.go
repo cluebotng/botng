@@ -99,12 +99,10 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	XmlSpan.End()
 	logger = logger.WithField("request", xmlData)
 
-	_, scoreSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score")
-	defer scoreSpan.End()
-
 	coreUrl := fmt.Sprintf("%s:%d", coreHost, configuration.Core.Port)
 	logger.Tracef("Connecting to %v", coreUrl)
 
+	_, scoreSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score")
 	dialer := net.Dialer{Timeout: time.Second * 5}
 	conn, err := dialer.Dial("tcp", coreUrl)
 	if err != nil {
@@ -121,7 +119,6 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	}
 	response := []byte{}
 	tmp := make([]byte, 4096)
-	i := 0
 	for {
 		n, err := conn.Read(tmp)
 		if err != nil {
@@ -134,10 +131,12 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 		if strings.Contains(string(response), "</WPEditSet>") {
 			break
 		}
-		i += 1
 	}
+	defer scoreSpan.End()
 	logger = logger.WithField("response", response)
 
+	_, scoreDecodeSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score.decode")
+	defer scoreDecodeSpan.End()
 	editSet := model.WPEditScoreSet{}
 	if err := xml.Unmarshal(response, &editSet); err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())
