@@ -103,6 +103,7 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	logger.Tracef("Connecting to %v", coreUrl)
 
 	_, scoreSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score")
+	defer scoreSpan.End()
 	dialer := net.Dialer{Timeout: time.Second * 5}
 	conn, err := dialer.Dial("tcp", coreUrl)
 	if err != nil {
@@ -132,14 +133,14 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 			break
 		}
 	}
-	defer scoreSpan.End()
+	scoreSpan.End()
 	logger = logger.WithField("response", response)
 
 	_, scoreDecodeSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score.decode")
 	defer scoreDecodeSpan.End()
 	editSet := model.WPEditScoreSet{}
 	if err := xml.Unmarshal(response, &editSet); err != nil {
-		scoreSpan.SetStatus(codes.Error, err.Error())
+		scoreDecodeSpan.SetStatus(codes.Error, err.Error())
 		logger.Warnf("Could not decode response: %v", err)
 		return false, err
 	}
