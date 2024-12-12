@@ -22,6 +22,7 @@ Not supported:
 * `oftenvandalized.txt` - This was used to emit messages into IRC, but hasn't been used since, but haven't been used
   since 2018 (80cab4)
 * `irc.wikimedia.org` - In favour of the HTTP event stream (which backs the IRC relay)
+* `titles.txt` - This is replaced by a MySQL table
 
 TODO
 ----

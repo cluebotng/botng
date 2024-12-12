@@ -9,6 +9,7 @@ import (
 )
 
 var ReleaseTag = "development"
+var RecentRevertThreshold = int64(86400)
 
 type BotConfiguration struct {
 	Owner    string
@@ -41,7 +42,7 @@ type ReplicaSqlConfiguration struct {
 }
 
 type SqlConfiguration struct {
-	Replica ReplicaSqlConfiguration
+	Replica []ReplicaSqlConfiguration
 	Cluebot CluebotSqlConfiguration
 }
 
@@ -103,7 +104,7 @@ func NewConfiguration() *Configuration {
 	configuration := Configuration{}
 
 	var configPath string
-	if val, ok := os.LookupEnv("BOT_CFG"); ok {
+	if val, ok := os.LookupEnv("BOTNG_CFG"); ok {
 		configPath = val
 	}
 	if configPath != "" {

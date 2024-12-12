@@ -125,7 +125,7 @@ func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, 
 				password:        password,
 				sendChan:        make(chan string, 10000),
 				reConnectSignal: make(chan bool, 1),
-				limiter:         rate.NewLimiter(6, 6),
+				limiter:         rate.NewLimiter(2, 4),
 				channel:         channel,
 			}
 			go f.reader(wg)
@@ -234,15 +234,17 @@ func (f *IrcServer) writer(wg *sync.WaitGroup) {
 			logger.Warn("Stopping writing due to no connection")
 			break
 		}
+		message := <-f.sendChan
+		// Just drop the message if we cannot send right now,
+		// otherwise we just make a huge backlog
 		if f.limiter.Allow() {
-			message := <-f.sendChan
 			logger.Tracef("Sending: %+v\n", message)
 			if !f.send(fmt.Sprintf("PRIVMSG #%s :%s", f.channel, message)) {
 				logger.Warn("IRC write error")
 				break
 			}
 		} else {
-			logger.Infof("Not permitted to write")
+			logger.Tracef("Not sending due to rate limit: %+v\n", message)
 		}
 	}
 	f.close()

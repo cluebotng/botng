@@ -32,11 +32,13 @@ func loadSinglePageRevision(logger *logrus.Entry, ctx context.Context, change *m
 		Timestamp: revisionData.Current.Timestamp,
 		Text:      revisionData.Current.Data,
 		Id:        revisionData.Current.Id,
+		Username:  revisionData.Current.User,
 	}
 	change.Previous = model.ProcessEventRevision{
 		Timestamp: revisionData.Previous.Timestamp,
 		Text:      revisionData.Previous.Data,
 		Id:        revisionData.Previous.Id,
+		Username:  revisionData.Previous.User,
 	}
 
 	metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_revisions", "status": "success"}).Inc()

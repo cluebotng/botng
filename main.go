@@ -18,11 +18,12 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
 
-func RunMetricPoller(wg *sync.WaitGroup, toReplicationWatcher, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays) {
+func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays, db *database.DatabaseConnection) {
 	wg.Add(1)
 	defer wg.Done()
 
@@ -41,6 +42,18 @@ func RunMetricPoller(wg *sync.WaitGroup, toReplicationWatcher, toPageMetadataLoa
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "debug"}).Set(float64(r.GetPendingDebugMessages()))
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "revert"}).Set(float64(r.GetPendingRevertMessages()))
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "spam"}).Set(float64(r.GetPendingSpamMessages()))
+
+		db.UpdateMetrics()
+	}
+}
+
+func RunDatabasePurger(wg *sync.WaitGroup, db *database.DatabaseConnection) {
+	wg.Add(1)
+	defer wg.Done()
+
+	timer := time.NewTicker(time.Hour)
+	for range timer.C {
+		db.ClueBot.PurgeOldRevertTimes()
 	}
 }
 
@@ -80,8 +93,13 @@ func main() {
 			logrus.FieldKeyMsg:   "message",
 		},
 	})
+
+	logFile := "botng.log"
+	if value, ok := os.LookupEnv("BOTNG_LOG"); ok {
+		logFile = value
+	}
 	logrus.AddHook(helpers.NewLogFileHook(&lumberjack.Logger{
-		Filename:   "cbng.log",
+		Filename:   logFile,
 		MaxBackups: 31,
 		MaxAge:     1,
 		Compress:   true,
@@ -127,6 +145,7 @@ func main() {
 
 	r := relay.NewRelays(&wg, useIrcRelay, configuration.Irc.Server, configuration.Irc.Port, configuration.Irc.Username, configuration.Irc.Password, configuration.Irc.Channel)
 	db := database.NewDatabaseConnection(configuration)
+	defer db.Disconnect()
 
 	// Processing channels
 	toReplicationWatcher := make(chan *model.ProcessEvent, 10000)
@@ -141,7 +160,8 @@ func main() {
 	toScoringProcessor := make(chan *model.ProcessEvent, 10000)
 	toRevertProcessor := make(chan *model.ProcessEvent, 10000)
 
-	go RunMetricPoller(&wg, toReplicationWatcher, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r)
+	go RunMetricPoller(&wg, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r, db)
+	go RunDatabasePurger(&wg, db)
 
 	go feed.ConsumeHttpChangeEvents(&wg, configuration, toReplicationWatcher)
 	go processor.ReplicationWatcher(&wg, configuration, db, ignoreReplicationDelay, toReplicationWatcher, toPageMetadataLoader)

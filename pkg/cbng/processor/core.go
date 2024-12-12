@@ -48,14 +48,14 @@ func generateXML(pe *model.ProcessEvent) ([]byte, error) {
 
 	data := WPEditSet{
 		WPEdit: WPEdit{
-			EditType:               pe.EditType,
-			EditId:                 pe.EditId,
+			EditType:               "change",
+			EditId:                 pe.Current.Id,
 			Comment:                pe.Comment,
 			User:                   pe.User.Username,
 			UserEditCount:          pe.User.EditCount,
 			UserDistinctPagesCount: pe.User.DistinctPages,
 			UserWarningsCount:      pe.User.Warns,
-			PreviousUser:           pe.PreviousUser,
+			PreviousUser:           pe.Previous.Username,
 			UserRegistrationTime:   pe.User.RegistrationTime,
 			Common: WPEditCommon{
 				PageMadeTime:         pe.Common.PageMadeTime,
@@ -68,6 +68,10 @@ func generateXML(pe *model.ProcessEvent) ([]byte, error) {
 			Current: WPEditRevision{
 				Text:      pe.Current.Text,
 				Timestamp: pe.Current.Timestamp,
+			},
+			Previous: WPEditRevision{
+				Text:      pe.Previous.Text,
+				Timestamp: pe.Previous.Timestamp,
 			},
 		},
 	}
@@ -93,14 +97,13 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 		return false, err
 	}
 	XmlSpan.End()
-
-	_, scoreSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score")
-	defer scoreSpan.End()
+	logger = logger.WithField("request", xmlData)
 
 	coreUrl := fmt.Sprintf("%s:%d", coreHost, configuration.Core.Port)
 	logger.Tracef("Connecting to %v", coreUrl)
 
-	dialer := net.Dialer{Timeout: time.Second * 2}
+	_, scoreSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score")
+	dialer := net.Dialer{Timeout: time.Second * 5}
 	conn, err := dialer.Dial("tcp", coreUrl)
 	if err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())
@@ -109,26 +112,13 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	}
 	defer conn.Close()
 
-	if err := conn.SetDeadline(time.Now().Add(time.Second * 2)); err != nil {
-		scoreSpan.SetStatus(codes.Error, err.Error())
-		logger.Errorf("Could not set deadline: %v", err)
-		return false, err
-	}
-	if err := conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
-		scoreSpan.SetStatus(codes.Error, err.Error())
-		logger.Errorf("Could not set read deadline: %v", err)
-		return false, err
-	}
-
 	if _, err := conn.Write(xmlData); err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())
 		logger.Infof("Could not write payload: %v", err)
 		return false, err
 	}
-
 	response := []byte{}
 	tmp := make([]byte, 4096)
-	i := 0
 	for {
 		n, err := conn.Read(tmp)
 		if err != nil {
@@ -141,10 +131,12 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 		if strings.Contains(string(response), "</WPEditSet>") {
 			break
 		}
-		i += 1
 	}
+	defer scoreSpan.End()
 	logger = logger.WithField("response", response)
 
+	_, scoreDecodeSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score.decode")
+	defer scoreDecodeSpan.End()
 	editSet := model.WPEditScoreSet{}
 	if err := xml.Unmarshal(response, &editSet); err != nil {
 		scoreSpan.SetStatus(codes.Error, err.Error())

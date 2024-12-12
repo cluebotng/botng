@@ -41,8 +41,6 @@ func (ci *CluebotInstance) GenerateVandalismId(logger *logrus.Entry, ctx context
 	_, span := metrics.OtelTracer.Start(ctx, "database.cluebot.GenerateVandalismId")
 	defer span.End()
 
-	var vandalismId int64
-
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
@@ -50,12 +48,14 @@ func (ci *CluebotInstance) GenerateVandalismId(logger *logrus.Entry, ctx context
 	if err != nil {
 		logger.Errorf("Error running query: %v", err)
 		span.SetStatus(codes.Error, err.Error())
-		return vandalismId, err
+		return 0, err
 	}
-	if vandalismId, err := res.LastInsertId(); err != nil {
+
+	vandalismId, err := res.LastInsertId()
+	if err != nil {
 		logger.Errorf("Failed to get insert id: %v", err)
 		span.SetStatus(codes.Error, err.Error())
-		return vandalismId, err
+		return 0, err
 	}
 
 	logger.Debugf("Generated id %v", vandalismId)
@@ -153,13 +153,10 @@ func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, ctx context.Contex
 	defer span.End()
 
 	var revertTime int64
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
-	defer cancel()
-
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
-	rows, err := db.QueryContext(timeoutCtx, "SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
+	rows, err := db.Query("SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
 	if err != nil {
 		logger.Infof("Error running query: %v", err)
 		span.SetStatus(codes.Error, err.Error())
@@ -178,7 +175,7 @@ func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, ctx context.Contex
 	return revertTime
 }
 
-func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, title, user string) int64 {
+func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, title, user string) error {
 	logger := l.WithFields(logrus.Fields{
 		"function": "database.cluebot.SaveRevertTime",
 		"args": map[string]interface{}{
@@ -190,17 +187,15 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 	defer span.End()
 
 	var revertTime int64
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
-	defer cancel()
-
 	db := ci.getDatabaseConnection()
 	defer db.Close()
 
-	rows, err := db.QueryContext(timeoutCtx, "INSERT INTO `last_revert` (`title`, `user`, `time`) "+
+	rows, err := db.Query("INSERT INTO `last_revert` (`title`, `user`, `time`) "+
 		"VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `time`=`time`", title, user, time.Now().UTC().Unix())
 	if err != nil {
 		logger.Infof("Error running query: %v", err)
 		span.SetStatus(codes.Error, err.Error())
+		return err
 	} else {
 		defer rows.Close()
 		if !rows.Next() {
@@ -209,9 +204,27 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 			if err := rows.Scan(&revertTime); err != nil {
 				logger.Errorf("Error reading rows for query: %v", err)
 				span.SetStatus(codes.Error, err.Error())
+				return err
 			}
 		}
 	}
 
-	return revertTime
+	return nil
+}
+
+func (ci *CluebotInstance) PurgeOldRevertTimes() {
+	logger := logrus.WithFields(logrus.Fields{
+		"function": "database.cluebot.PurgeOldRevertTimes",
+	})
+	_, span := metrics.OtelTracer.Start(context.Background(), "database.cluebot.PurgeOldRevertTimes")
+	defer span.End()
+
+	db := ci.getDatabaseConnection()
+	defer db.Close()
+
+	_, err := db.Exec("DELETE FROM `last_revert` WHERE `time` < ?", time.Now().UTC().Unix()-(config.RecentRevertThreshold+10))
+	if err != nil {
+		logger.Warnf("Error purging database: %v", err)
+		span.SetStatus(codes.Error, err.Error())
+	}
 }

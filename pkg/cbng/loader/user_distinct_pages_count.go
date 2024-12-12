@@ -20,13 +20,6 @@ func loadSingleDistinctPagesCount(logger *logrus.Entry, ctx context.Context, cha
 	// Load the user distinct pages count
 	userDistinctPagesCount, err := db.Replica.GetUserDistinctPagesCount(logger, ctx, change.User.Username)
 	if err != nil {
-		// If the user has a super high edit count, then fake it out as a non-error....
-		// This query will run successfully but take multiple mins, which we can't afford
-		// Since the user has a super high edit count, we're going to skip reverting them anyway :shrug:
-		if change.User.EditCount > 10000 {
-			return nil
-		}
-
 		metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_distinct_count", "status": "failed"}).Inc()
 		return err
 	}

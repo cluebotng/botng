@@ -12,10 +12,9 @@ wikipedia:
   username: ClueBot_NG
 
 irc:
-  server: irc.freenode.org
+  server: irc.libera.chat
   port: 6697
   username: CBNGRelay
-  password: xxxxxxxx
   channel:
     spam: wikipedia-en-cbngfeed2
     revert: wikipedia-en-cbngrevertfeed2
@@ -23,10 +22,10 @@ irc:
 
 sql:
   replica:
-    username: root
-    host: 127.0.0.1
-    port: 3306
-    schema: enwiki_p
+    - username: root
+      host: 127.0.0.1
+      port: 3306
+      schema: enwiki_p
   cluebot:
     username: root
     host: 127.0.0.1
