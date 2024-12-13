@@ -120,6 +120,16 @@ func main() {
 		otelconfig.WithServiceName("ClueBot NG"),
 	}
 	if configuration.Honey.Key != "" {
+		for k, v := range map[string]string{
+			"OTEL_TRACES_SAMPLER":      "traceidratio",
+			"OTEL_TRACES_SAMPLER_ARG":  "0.5",
+			"OTEL_RESOURCE_ATTRIBUTES": "SampleRate=2",
+		} {
+			if err := os.Setenv(k, v); err != nil {
+				logrus.Warnf("failed to set sampling env var (%s -> %v): %s", k, v, err)
+			}
+		}
+
 		otelOptions = append(otelOptions, otelconfig.WithExporterProtocol(otelconfig.ProtocolHTTPProto))
 		otelOptions = append(otelOptions, otelconfig.WithExporterEndpoint("https://api.honeycomb.io"))
 		otelOptions = append(otelOptions, otelconfig.WithHeaders(map[string]string{
