@@ -11,7 +11,6 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"net/http"
 	"strings"
 	"sync"
@@ -42,25 +41,18 @@ type httpChangeEvent struct {
 
 func handleLine(logger *logrus.Entry, line string, configuration *config.Configuration, changeFeed chan<- *model.ProcessEvent) {
 	if len(line) > 5 && line[0:5] == "data:" {
-		rootCtx, rootSpan := metrics.OtelTracer.Start(context.Background(), "feed.ConsumeHttpChangeEvents.event")
-		rootUUID := uuid.NewV4().String()
-		rootSpan.SetAttributes(attribute.String("uuid", rootUUID))
-		defer rootSpan.End()
-
-		_, decodeSpan := metrics.OtelTracer.Start(rootCtx, "feed.ConsumeHttpChangeEvents.event.unmarshal")
 		httpChange := httpChangeEvent{}
 		if err := json.Unmarshal([]byte(line[5:]), &httpChange); err != nil {
 			logger.Warnf("Decoding failed: %v", err)
-			decodeSpan.SetStatus(codes.Error, err.Error())
-			decodeSpan.End()
 			return
 		}
-		decodeSpan.End()
 		logger.Tracef("Received: %+v", httpChange)
 
 		if httpChange.Type == "edit" && httpChange.ServerName == configuration.Wikipedia.Host {
-			_, emitterSpan := metrics.OtelTracer.Start(rootCtx, "feed.ConsumeHttpChangeEvents.event.emit")
-			defer emitterSpan.End()
+			_, span := metrics.OtelTracer.Start(context.Background(), "feed.ConsumeHttpChangeEvents.event")
+			rootUUID := uuid.NewV4().String()
+			span.SetAttributes(attribute.String("uuid", rootUUID))
+			defer span.End()
 
 			namespace := strings.TrimRight(httpChange.Namespace, ":")
 			if namespace == "" {
