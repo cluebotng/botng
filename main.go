@@ -122,8 +122,8 @@ func main() {
 	if configuration.Honey.Key != "" {
 		for k, v := range map[string]string{
 			"OTEL_TRACES_SAMPLER":      "traceidratio",
-			"OTEL_TRACES_SAMPLER_ARG":  "0.5",
-			"OTEL_RESOURCE_ATTRIBUTES": "SampleRate=2",
+			"OTEL_TRACES_SAMPLER_ARG":  "0.25",
+			"OTEL_RESOURCE_ATTRIBUTES": "SampleRate=4",
 		} {
 			if err := os.Setenv(k, v); err != nil {
 				logrus.Warnf("failed to set sampling env var (%s -> %v): %s", k, v, err)
