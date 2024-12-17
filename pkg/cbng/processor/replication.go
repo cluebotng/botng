@@ -81,9 +81,6 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 			}
 
 		case change := <-inChangeFeed:
-			_, span := metrics.OtelTracer.Start(context.Background(), "replication.ReplicationWatcher.loop")
-			span.SetAttributes(attribute.String("uuid", change.Uuid))
-
 			// Put the change feed into the pending map
 			pending[change.Uuid] = change
 
@@ -100,7 +97,6 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 			if change.Common.Title == configuration.Instances.TFA.GetPageName() {
 				configuration.Instances.TFA.TriggerReload()
 			}
-			span.End()
 		}
 	}
 }
