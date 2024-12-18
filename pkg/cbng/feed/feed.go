@@ -2,7 +2,6 @@ package feed
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
@@ -10,7 +9,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"net/http"
 	"strings"
 	"sync"
@@ -49,18 +47,13 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 		logger.Tracef("Received: %+v", httpChange)
 
 		if httpChange.Type == "edit" && httpChange.ServerName == configuration.Wikipedia.Host {
-			_, span := metrics.OtelTracer.Start(context.Background(), "feed.ConsumeHttpChangeEvents.event")
-			rootUUID := uuid.NewV4().String()
-			span.SetAttributes(attribute.String("uuid", rootUUID))
-			defer span.End()
-
 			namespace := strings.TrimRight(httpChange.Namespace, ":")
 			if namespace == "" {
 				namespace = "main"
 			}
 
 			change := model.ProcessEvent{
-				Uuid:         rootUUID,
+				Uuid:         uuid.NewV4().String(),
 				ReceivedTime: time.Now().UTC(),
 				Common: model.ProcessEventCommon{
 					Namespace:   namespace,
