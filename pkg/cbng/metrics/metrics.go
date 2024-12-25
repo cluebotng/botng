@@ -24,6 +24,7 @@ var PendingRevertProcessor prometheus.Gauge
 var IrcNotificationsPending *prometheus.GaugeVec
 var IrcNotificationsSent *prometheus.CounterVec
 
+var FeedStatus *prometheus.CounterVec
 var EditStatus *prometheus.CounterVec
 var RevertStatus *prometheus.CounterVec
 
@@ -46,6 +47,7 @@ var OtelTracer trace.Tracer
 func init() {
 	OtelTracer = otel.Tracer("ClueBot NG")
 
+	FeedStatus = promauto.NewCounterVec(prometheus.CounterOpts{Name: "cbng_feed_state"}, []string{"status"})
 	EditStatus = promauto.NewCounterVec(prometheus.CounterOpts{Name: "cbng_event_state"}, []string{"state", "status"})
 	RevertStatus = promauto.NewCounterVec(prometheus.CounterOpts{Name: "cbng_revert_state"}, []string{"state", "status", "meta"})
 

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"github.com/cluebotng/botng/pkg/cbng/config"
+	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/prometheus/client_golang/prometheus"
@@ -42,42 +43,61 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 		httpChange := httpChangeEvent{}
 		if err := json.Unmarshal([]byte(line[5:]), &httpChange); err != nil {
 			logger.Warnf("Decoding failed: %v", err)
+			metrics.FeedStatus.With(prometheus.Labels{"status": "decoding_failed"}).Inc()
 			return
 		}
 		logger.Tracef("Received: %+v", httpChange)
+		metrics.FeedStatus.With(prometheus.Labels{"status": "decoded"}).Inc()
 
-		if httpChange.Type == "edit" && httpChange.ServerName == configuration.Wikipedia.Host {
-			namespace := strings.TrimRight(httpChange.Namespace, ":")
-			if namespace == "" {
-				namespace = "main"
-			}
-
-			change := model.ProcessEvent{
-				Uuid:         uuid.NewV4().String(),
-				ReceivedTime: time.Now().UTC(),
-				Common: model.ProcessEventCommon{
-					Namespace:   namespace,
-					NamespaceId: httpChange.NamespaceId,
-					Title:       httpChange.Title,
-				},
-				Comment: httpChange.Comment,
-				User: model.ProcessEventUser{
-					Username: httpChange.User,
-				},
-				Length: httpChange.Length.New - httpChange.Length.Old,
-
-				Current: model.ProcessEventRevision{
-					Id: httpChange.Revision.New,
-				},
-				Previous: model.ProcessEventRevision{
-					Id: httpChange.Revision.Old,
-				},
-			}
-
-			logger.WithFields(logrus.Fields{"uuid": change.Uuid, "change": change}).Debug("Received new event")
-			metrics.EditStatus.With(prometheus.Labels{"state": "received_new", "status": "success"}).Inc()
-			changeFeed <- &change
+		if httpChange.Type != "edit" {
+			metrics.FeedStatus.With(prometheus.Labels{"status": "rejected_type"}).Inc()
+			return
 		}
+
+		if httpChange.ServerName != configuration.Wikipedia.Host {
+			metrics.FeedStatus.With(prometheus.Labels{"status": "rejected_server"}).Inc()
+			return
+		}
+
+		namespace := strings.TrimRight(httpChange.Namespace, ":")
+		if namespace == "" {
+			namespace = "main"
+		}
+
+		// Skip namespaces we're not interested in
+		if httpChange.NamespaceId != 0 && !helpers.StringItemInSlice(namespace, configuration.Dynamic.NamespaceOptIn) {
+			logger.Debugf("Skipping change due to namespace: %s (%d)", namespace, httpChange.NamespaceId)
+			metrics.FeedStatus.With(prometheus.Labels{"status": "rejected_namespace"}).Inc()
+			return
+		}
+
+		metrics.FeedStatus.With(prometheus.Labels{"status": "received"}).Inc()
+		change := model.ProcessEvent{
+			Uuid:         uuid.NewV4().String(),
+			ReceivedTime: time.Now().UTC(),
+			Common: model.ProcessEventCommon{
+				Namespace:   namespace,
+				NamespaceId: httpChange.NamespaceId,
+				Title:       httpChange.Title,
+			},
+			Comment: httpChange.Comment,
+			User: model.ProcessEventUser{
+				Username: httpChange.User,
+			},
+			Length: httpChange.Length.New - httpChange.Length.Old,
+
+			Current: model.ProcessEventRevision{
+				Id: httpChange.Revision.New,
+			},
+			Previous: model.ProcessEventRevision{
+				Id: httpChange.Revision.Old,
+			},
+		}
+
+		// Otherwise send for processing
+		logger.WithFields(logrus.Fields{"uuid": change.Uuid, "change": change}).Debug("Received new event")
+		metrics.EditStatus.With(prometheus.Labels{"state": "received_new", "status": "success"}).Inc()
+		changeFeed <- &change
 	}
 }
 

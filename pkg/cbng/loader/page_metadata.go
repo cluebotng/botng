@@ -17,15 +17,6 @@ import (
 )
 
 func loadSinglePageMetadata(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, outChangeFeed chan *model.ProcessEvent) error {
-
-	// Skip namespaces we're not interested in
-	if change.Common.NamespaceId != 0 && !helpers.StringItemInSlice(change.Common.Namespace, configuration.Dynamic.NamespaceOptIn) {
-		logger.Debugf("Skipping change due to namespace: %s (%d)", change.Common.Namespace, change.Common.NamespaceId)
-		metrics.EditStatus.With(prometheus.Labels{"state": "verify_namespace", "status": "skipped"}).Inc()
-		return nil
-	}
-	metrics.EditStatus.With(prometheus.Labels{"state": "verify_namespace", "status": "success"}).Inc()
-
 	// Load the page created metadata
 	pageCreatedUser, pageCreatedTimestamp, err := db.Replica.GetPageCreatedTimeAndUser(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title))
 	if err != nil {
