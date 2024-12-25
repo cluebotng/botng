@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"time"
@@ -32,6 +33,7 @@ type ProcessEventUser struct {
 }
 
 type ProcessEvent struct {
+	TraceContext   context.Context
 	Uuid           string
 	ReceivedTime   time.Time
 	Attempts       int32

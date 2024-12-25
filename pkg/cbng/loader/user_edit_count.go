@@ -46,7 +46,7 @@ func LoadUserEditCount(wg *sync.WaitGroup, configuration *config.Configuration, 
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderUserEditCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadUserEditCount")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadUserEditCount")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

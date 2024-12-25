@@ -38,7 +38,7 @@ func LoadPageRecentEditCount(wg *sync.WaitGroup, configuration *config.Configura
 	for {
 		change := <-inChangeFeed
 		metrics.LoaderPageRecentEditCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadPageRecentEditCount")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadPageRecentEditCount")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

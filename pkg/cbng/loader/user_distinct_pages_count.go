@@ -36,7 +36,7 @@ func LoadDistinctPagesCount(wg *sync.WaitGroup, configuration *config.Configurat
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderUserDistinctPageCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadDistinctPagesCount")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadDistinctPagesCount")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

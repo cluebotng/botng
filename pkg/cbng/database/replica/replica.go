@@ -375,32 +375,25 @@ func (ri *ReplicaInstance) GetUserDistinctPagesCount(l *logrus.Entry, ctx contex
 	return distinctPageCount, nil
 }
 
-func (ri *ReplicaInstance) GetLatestChangeTimestamp(l *logrus.Entry, ctx context.Context) (int64, error) {
+func (ri *ReplicaInstance) GetLatestChangeTimestamp(l *logrus.Entry) (int64, error) {
 	logger := l.WithFields(logrus.Fields{"function": "database.replica.ReplicaInstance.GetLatestChangeTimestamp"})
-	_, span := metrics.OtelTracer.Start(ctx, "database.replica.ReplicaInstance.GetLatestChangeTimestamp")
-	defer span.End()
-
 	var replicationDelay []uint8
 	rows, err := ri.getHandle().Query("SET STATEMENT max_statement_time=10 FOR " +
 		"SELECT UNIX_TIMESTAMP(MAX(rc_timestamp)) FROM `recentchanges`")
 	if err != nil {
 		logger.Errorf("Failed to query replication delay: %+v", err)
-		span.SetStatus(codes.Error, err.Error())
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		span.SetStatus(codes.Error, "Found no results for replication delay query")
 		return int64(0), errors.New("no results for replication delay query")
 	}
 
 	if err := rows.Scan(&replicationDelay); err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return int64(0), fmt.Errorf("failed to read replication delay: %+v", err)
 	}
 
 	if len(replicationDelay) == 0 {
-		span.SetStatus(codes.Error, "No replication delay data")
 		return int64(0), fmt.Errorf("no replication delay data: %+v", replicationDelay)
 	}
 

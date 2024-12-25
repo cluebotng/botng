@@ -64,7 +64,7 @@ func ProcessScoringChangeEvents(wg *sync.WaitGroup, configuration *config.Config
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.ProcessorsScoringInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "processor.ProcessScoringChangeEvents")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "processor.ProcessScoringChangeEvents")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

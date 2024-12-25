@@ -38,7 +38,7 @@ func LoadPageMetadata(wg *sync.WaitGroup, configuration *config.Configuration, d
 	for {
 		change := <-inChangeFeed
 		metrics.LoaderPageMetadataInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadPageMetadata")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadPageMetadata")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

@@ -325,7 +325,7 @@ func ProcessRevertChangeEvents(wg *sync.WaitGroup, configuration *config.Configu
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.ProcessorsRevertInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "processor.ProcessRevertChangeEvents")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "processor.ProcessRevertChangeEvents")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

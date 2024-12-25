@@ -36,7 +36,7 @@ func LoadPageRecentRevertCount(wg *sync.WaitGroup, configuration *config.Configu
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderPageRecentRevertCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadPageRecentRevertCount")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadPageRecentRevertCount")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

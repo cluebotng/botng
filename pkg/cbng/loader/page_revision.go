@@ -52,7 +52,7 @@ func LoadPageRevision(wg *sync.WaitGroup, api *wikipedia.WikipediaApi, r *relay.
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderPageRevisionInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadPageRevision")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadPageRevision")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

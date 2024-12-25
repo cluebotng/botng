@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"context"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
@@ -30,8 +29,6 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 			if mutex.TryLock() {
 				func() {
 					defer mutex.Unlock()
-					ctx, span := metrics.OtelTracer.Start(context.Background(), "replication.ReplicationWatcher.timer")
-					defer span.End()
 					metrics.ReplicationWatcherPending.Set(float64(len(pending)))
 
 					metrics.ProcessorsReplicationWatcherInUse.Inc()
@@ -40,17 +37,15 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 					var replicationPoint int64
 					if !ignoreReplicationDelay {
 						var err error
-						if replicationPoint, err = db.Replica.GetLatestChangeTimestamp(logger, ctx); err != nil {
+						if replicationPoint, err = db.Replica.GetLatestChangeTimestamp(logger); err != nil {
 							logger.Warnf("Failed to get current replication point: %+v", err)
 							return
 						}
 					}
 
-					_, loopSpan := metrics.OtelTracer.Start(ctx, "replication.ReplicationWatcher.timer.pending")
-					defer loopSpan.End()
 					for _, change := range pending {
 						func() {
-							_, span := metrics.OtelTracer.Start(context.Background(), "replication.ReplicationWatcher.pending.change")
+							_, span := metrics.OtelTracer.Start(change.TraceContext, "replication.ReplicationWatcher.pending.change")
 							span.SetAttributes(attribute.String("uuid", change.Uuid))
 							defer span.End()
 							// If we're ignoring replication or are past the change in replication, kick off the process

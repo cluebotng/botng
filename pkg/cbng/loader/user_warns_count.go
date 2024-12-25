@@ -36,7 +36,7 @@ func LoadUserWarnsCount(wg *sync.WaitGroup, configuration *config.Configuration,
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderUserWarnsCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(context.Background(), "loader.LoadUserWarnsCount")
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadUserWarnsCount")
 		span.SetAttributes(attribute.String("uuid", change.Uuid))
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})

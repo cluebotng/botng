@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"crypto/tls"
+	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/feed"
@@ -11,11 +14,17 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/processor"
 	"github.com/cluebotng/botng/pkg/cbng/relay"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
-	"github.com/honeycombio/otel-config-go/otelconfig"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"net/http"
 	"os"
@@ -57,10 +66,69 @@ func RunDatabasePurger(wg *sync.WaitGroup, db *database.DatabaseConnection) {
 	}
 }
 
+func setupTracing(configuration *config.Configuration, debugMetrics bool) {
+	if configuration.Honey.SampleRate < 1 {
+		for k, v := range map[string]string{
+			"OTEL_TRACES_SAMPLER":      "traceidratio",
+			"OTEL_TRACES_SAMPLER_ARG":  fmt.Sprintf("%.2f", configuration.Honey.SampleRate),
+			"OTEL_RESOURCE_ATTRIBUTES": fmt.Sprintf("SampleRate=%.2f", (1 / configuration.Honey.SampleRate)),
+		} {
+			logrus.Debugf("setting env var %s to %s", k, v)
+			if err := os.Setenv(k, v); err != nil {
+				logrus.Warnf("failed to set sampling env var (%s -> %v): %s", k, v, err)
+			}
+		}
+	}
+
+	traceResource, err := resource.New(
+		context.Background(),
+		resource.WithAttributes(semconv.ServiceNameKey.String("ClueBot NG")),
+	)
+	if err != nil {
+		logrus.Fatalf("failed to init otlptrace provider: %s", err)
+	}
+
+	opts := []trace.TracerProviderOption{
+		trace.WithResource(traceResource),
+	}
+	if configuration.Honey.Key != "" {
+		spanExporter, err := otlptrace.New(
+			context.Background(),
+			otlptracehttp.NewClient(
+				otlptracehttp.WithTLSClientConfig(&tls.Config{}),
+				otlptracehttp.WithEndpoint("api.honeycomb.io"),
+				otlptracehttp.WithHeaders(map[string]string{
+					"x-honeycomb-team": configuration.Honey.Key,
+				}),
+				otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
+			),
+		)
+		if err != nil {
+			logrus.Fatalf("failed to init otlptrace provider: %s", err)
+		}
+
+		bsp := trace.NewBatchSpanProcessor(spanExporter)
+		opts = append(opts, trace.WithSpanProcessor(bsp))
+	}
+
+	if debugMetrics {
+		spanExporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+		if err != nil {
+			logrus.Fatalf("failed to init stdouttrace provider: %e", err)
+		}
+		ssp := trace.NewBatchSpanProcessor(spanExporter)
+		opts = append(opts, trace.WithSpanProcessor(ssp))
+	}
+
+	tp := trace.NewTracerProvider(opts...)
+	otel.SetTracerProvider(tp)
+}
+
 func main() {
 	var wg sync.WaitGroup
 	var debugLogging bool
 	var traceLogging bool
+	var debugMetrics bool
 	var useIrcRelay bool
 	var ignoreReplicationDelay bool
 	var processors int
@@ -69,6 +137,7 @@ func main() {
 
 	pflag.BoolVar(&debugLogging, "debug", false, "Should we log debug info")
 	pflag.BoolVar(&traceLogging, "trace", false, "Should we log trace info")
+	pflag.BoolVar(&debugMetrics, "debug-metrics", false, "Should we log metrics")
 	pflag.BoolVar(&useIrcRelay, "irc-relay", false, "Should we use enable the IRC relay")
 	pflag.BoolVar(&ignoreReplicationDelay, "no-replication-check", false, "Should we disable the replication monitoring")
 	pflag.IntVar(&processors, "processors", 20, "Number of processors to use")
@@ -106,6 +175,7 @@ func main() {
 	}))
 
 	configuration := config.NewConfiguration()
+	setupTracing(configuration, debugMetrics)
 
 	wg.Add(1)
 	go func() {
@@ -115,36 +185,6 @@ func main() {
 			logrus.Fatalf("failed to serve metrics: %s", err)
 		}
 	}()
-
-	var otelOptions = []otelconfig.Option{
-		otelconfig.WithServiceName("ClueBot NG"),
-	}
-	if configuration.Honey.Key != "" {
-		for k, v := range map[string]string{
-			"OTEL_TRACES_SAMPLER":      "traceidratio",
-			"OTEL_TRACES_SAMPLER_ARG":  "0.25",
-			"OTEL_RESOURCE_ATTRIBUTES": "SampleRate=4",
-		} {
-			if err := os.Setenv(k, v); err != nil {
-				logrus.Warnf("failed to set sampling env var (%s -> %v): %s", k, v, err)
-			}
-		}
-
-		otelOptions = append(otelOptions, otelconfig.WithExporterProtocol(otelconfig.ProtocolHTTPProto))
-		otelOptions = append(otelOptions, otelconfig.WithExporterEndpoint("https://api.honeycomb.io"))
-		otelOptions = append(otelOptions, otelconfig.WithHeaders(map[string]string{
-			"x-honeycomb-team": configuration.Honey.Key,
-		}))
-	} else {
-		otelOptions = append(otelOptions, otelconfig.WithTracesEnabled(false))
-		otelOptions = append(otelOptions, otelconfig.WithMetricsEnabled(false))
-	}
-
-	otelShutdown, err := otelconfig.ConfigureOpenTelemetry(otelOptions...)
-	if err != nil {
-		logrus.Fatalf("failed to init OTel SDK: %e", err)
-	}
-	defer otelShutdown()
 
 	api := wikipedia.NewWikipediaApi(
 		configuration.Wikipedia.Username,

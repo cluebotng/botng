@@ -2,6 +2,7 @@ package feed
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/helpers"
@@ -10,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"strings"
 	"sync"
@@ -72,7 +74,18 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 		}
 
 		metrics.FeedStatus.With(prometheus.Labels{"status": "received"}).Inc()
+		_, span := metrics.OtelTracer.Start(context.Background(), "feed.handleLine")
+		defer span.End()
+
 		change := model.ProcessEvent{
+			TraceContext: trace.ContextWithRemoteSpanContext(
+				context.Background(),
+				trace.NewSpanContext(trace.SpanContextConfig{
+					TraceID:    span.SpanContext().TraceID(),
+					SpanID:     span.SpanContext().SpanID(),
+					TraceFlags: trace.FlagsSampled,
+				}),
+			),
 			Uuid:         uuid.NewV4().String(),
 			ReceivedTime: time.Now().UTC(),
 			Common: model.ProcessEventCommon{
