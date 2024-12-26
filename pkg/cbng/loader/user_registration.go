@@ -22,10 +22,10 @@ func LoadUserRegistrationTime(wg *sync.WaitGroup, configuration *config.Configur
 
 			logger := change.Logger.WithField("function", "loader.LoadUserRegistrationTime")
 
-			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserRegistrationTime")
+			_, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserRegistrationTime")
 			defer span.End()
 
-			userRegTime, err := db.Replica.GetUserRegistrationTime(logger, ctx, change.User.Username)
+			userRegTime, err := db.Replica.GetUserRegistrationTime(logger, change.User.Username)
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_registration_time", "status": "failed"}).Inc()
 				logger.Error(err.Error())

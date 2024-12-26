@@ -21,10 +21,10 @@ func LoadDistinctPagesCount(wg *sync.WaitGroup, configuration *config.Configurat
 			change.EndActiveSpan()
 			logger := change.Logger.WithField("function", "loader.LoadDistinctPagesCount")
 
-			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadDistinctPagesCount")
+			_, span := metrics.OtelTracer.Start(change.TraceContext, "LoadDistinctPagesCount")
 			defer span.End()
 
-			userDistinctPagesCount, err := db.Replica.GetUserDistinctPagesCount(logger, ctx, change.User.Username)
+			userDistinctPagesCount, err := db.Replica.GetUserDistinctPagesCount(logger, change.User.Username)
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_distinct_count", "status": "failed"}).Inc()
 				logger.Error(err.Error())

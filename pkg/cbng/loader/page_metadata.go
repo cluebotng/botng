@@ -22,12 +22,12 @@ func LoadPageMetadata(wg *sync.WaitGroup, configuration *config.Configuration, d
 		func(changeEvent *model.ProcessEvent) {
 			change.EndActiveSpan()
 
-			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageMetadata")
+			_, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageMetadata")
 			defer span.End()
 
 			logger := change.Logger.WithField("function", "loader.LoadPageMetadata")
 
-			pageCreatedUser, pageCreatedTimestamp, err := db.Replica.GetPageCreatedTimeAndUser(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title))
+			pageCreatedUser, pageCreatedTimestamp, err := db.Replica.GetPageCreatedTimeAndUser(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title))
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_metadata", "status": "failed"}).Inc()
 				logger.Error(err.Error())

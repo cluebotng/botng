@@ -209,18 +209,18 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 	return nil
 }
 
-func (ci *CluebotInstance) PurgeOldRevertTimes() error {
+func (ci *CluebotInstance) PurgeOldRevertTimes(ctx context.Context) {
 	logger := logrus.WithFields(logrus.Fields{
 		"function": "database.cluebot.PurgeOldRevertTimes",
 	})
-	_, span := metrics.OtelTracer.Start(context.Background(), "database.cluebot.PurgeOldRevertTimes")
+	_, span := metrics.OtelTracer.Start(ctx, "database.cluebot.PurgeOldRevertTimes")
 	defer span.End()
 
 	db, err := ci.getDatabaseConnection()
 	if err != nil {
 		logger.Errorf("Error connecting to db: %v", err)
 		span.SetStatus(codes.Error, err.Error())
-		return err
+		return
 	}
 	defer db.Close()
 
@@ -228,7 +228,5 @@ func (ci *CluebotInstance) PurgeOldRevertTimes() error {
 	if err != nil {
 		logger.Warnf("Error purging database: %v", err)
 		span.SetStatus(codes.Error, err.Error())
-		return err
 	}
-	return nil
 }

@@ -1,7 +1,6 @@
 package loader
 
 import (
-	"context"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
@@ -24,17 +23,17 @@ func LoadUserEditCount(wg *sync.WaitGroup, configuration *config.Configuration, 
 			change.EndActiveSpan()
 			logger := change.Logger.WithField("function", "loader.LoadUserEditCount")
 
-			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserEditCount")
+			_, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserEditCount")
 			defer span.End()
 
-			var f func(l *logrus.Entry, parentCtx context.Context, user string) (int64, error)
+			var f func(l *logrus.Entry, user string) (int64, error)
 			if net.ParseIP(change.User.Username) != nil {
 				f = db.Replica.GetAnonymousUserEditCount
 			} else {
 				f = db.Replica.GetRegisteredUserEditCount
 			}
 
-			userEditCount, err := f(logger, ctx, change.User.Username)
+			userEditCount, err := f(logger, change.User.Username)
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_anonymous_user_edit_count", "status": "failed"}).Inc()
 				logger.Error(err.Error())

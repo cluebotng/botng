@@ -21,10 +21,10 @@ func LoadUserWarnsCount(wg *sync.WaitGroup, configuration *config.Configuration,
 			change.EndActiveSpan()
 			logger := change.Logger.WithField("function", "loader.LoadUserWarnsCount")
 
-			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserWarnsCount")
+			_, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserWarnsCount")
 			defer span.End()
 
-			userWarnCount, err := db.Replica.GetUserWarnCount(logger, ctx, change.User.Username)
+			userWarnCount, err := db.Replica.GetUserWarnCount(logger, change.User.Username)
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_warning_count", "status": "failed"}).Inc()
 				logger.Error(err.Error())

@@ -23,10 +23,10 @@ func LoadPageRecentRevertCount(wg *sync.WaitGroup, configuration *config.Configu
 			change.EndActiveSpan()
 			logger := change.Logger.WithField("function", "loader.LoadPageRecentRevertCount")
 
-			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageRecentRevertCount")
+			_, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageRecentRevertCount")
 			defer span.End()
 
-			pageRecentRevertCount, err := db.Replica.GetPageRecentRevertCount(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix())
+			pageRecentRevertCount, err := db.Replica.GetPageRecentRevertCount(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix())
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_recent_reverts", "status": "failed"}).Inc()
 				logger.Error(err.Error())

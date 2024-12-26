@@ -22,12 +22,12 @@ func LoadPageRecentEditCount(wg *sync.WaitGroup, configuration *config.Configura
 		func(changeEvent *model.ProcessEvent) {
 			change.EndActiveSpan()
 
-			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageRecentEditCount")
+			_, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageRecentEditCount")
 			defer span.End()
 
 			logger := change.Logger.WithField("function", "loader.LoadPageRecentEditCount")
 
-			pageRecentEditCount, err := db.Replica.GetPageRecentEditCount(logger, ctx, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix()-14*86400)
+			pageRecentEditCount, err := db.Replica.GetPageRecentEditCount(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix()-14*86400)
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_recent_edits", "status": "failed"}).Inc()
 				logger.Error(err.Error())
