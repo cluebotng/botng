@@ -8,6 +8,7 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"net"
 	"strings"
@@ -133,6 +134,9 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	}
 
 	logger.Debugf("Core response; Vandalism: %v, Score: %v", editSet.WPEdit.ThinkVandalism, editSet.WPEdit.Score)
+	span.SetAttributes(attribute.Float64("core.vandalism.score", editSet.WPEdit.Score))
+	span.SetAttributes(attribute.Bool("core.vandalism.result", editSet.WPEdit.ThinkVandalism))
+
 	pe.VandalismScore = editSet.WPEdit.Score
 	return editSet.WPEdit.ThinkVandalism, nil
 }

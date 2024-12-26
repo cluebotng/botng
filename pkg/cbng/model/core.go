@@ -1,7 +1,7 @@
 package model
 
 type WPEditScore struct {
-	Score          float32 `xml:"score"`
+	Score          float64 `xml:"score"`
 	ThinkVandalism bool    `xml:"think_vandalism"`
 }
 

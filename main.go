@@ -61,7 +61,11 @@ func RunDatabasePurger(wg *sync.WaitGroup, db *database.DatabaseConnection) {
 
 	timer := time.NewTicker(time.Hour)
 	for range timer.C {
-		db.ClueBot.PurgeOldRevertTimes()
+		func() {
+			ctx, span := metrics.OtelTracer.Start(context.Background(), "DatabasePurger")
+			defer span.End()
+			db.ClueBot.PurgeOldRevertTimes(ctx)
+		}()
 	}
 }
 

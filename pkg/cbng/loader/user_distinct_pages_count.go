@@ -1,7 +1,6 @@
 package loader
 
 import (
-	"context"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
@@ -9,42 +8,35 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/cluebotng/botng/pkg/cbng/relay"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/codes"
 	"sync"
 )
-
-func loadSingleDistinctPagesCount(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, outChangeFeed chan *model.ProcessEvent) error {
-
-	// Load the user distinct pages count
-	userDistinctPagesCount, err := db.Replica.GetUserDistinctPagesCount(logger, ctx, change.User.Username)
-	if err != nil {
-		metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_distinct_count", "status": "failed"}).Inc()
-		return err
-	}
-
-	metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_distinct_count", "status": "passed"}).Inc()
-	change.User.DistinctPages = userDistinctPagesCount
-	outChangeFeed <- change
-	return nil
-}
 
 func LoadDistinctPagesCount(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
-		logger := change.Logger.WithField("function", "loader.LoadDistinctPagesCount")
-
 		metrics.LoaderUserDistinctPageCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadDistinctPagesCount")
+		func(changeEvent *model.ProcessEvent) {
+			change.EndActiveSpan()
+			logger := change.Logger.WithField("function", "loader.LoadDistinctPagesCount")
 
-		if err := loadSingleDistinctPagesCount(logger, ctx, change, configuration, db, outChangeFeed); err != nil {
-			logger.Error(err.Error())
-			span.SetStatus(codes.Error, err.Error())
-			r.SendDebug(fmt.Sprintf("%v # Failed to get user distinct pages count", change.FormatIrcChange()))
-		}
+			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadDistinctPagesCount")
+			defer span.End()
 
-		span.End()
+			userDistinctPagesCount, err := db.Replica.GetUserDistinctPagesCount(logger, ctx, change.User.Username)
+			if err != nil {
+				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_distinct_count", "status": "failed"}).Inc()
+				logger.Error(err.Error())
+				span.SetStatus(codes.Error, err.Error())
+				r.SendDebug(fmt.Sprintf("%v # Failed to get user distinct pages count", change.FormatIrcChange()))
+			} else {
+				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_distinct_count", "status": "passed"}).Inc()
+				change.User.DistinctPages = userDistinctPagesCount
+				change.StartNewActiveSpan("pending.LoadUserWarnsCount")
+				outChangeFeed <- change
+			}
+		}(change)
 		metrics.LoaderUserDistinctPageCountInUse.Dec()
 	}
 }

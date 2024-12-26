@@ -300,26 +300,27 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 		doWarn(logger, ctx, api, r, change, configuration, mysqlVandalismId)
 		db.ClueBot.MarkVandalismRevertedSuccessfully(logger, ctx, mysqlVandalismId)
 
-		r.SendRevert(fmt.Sprintf("%s (Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ReceivedTime.Unix()))
+		r.SendRevert(fmt.Sprintf("%s (Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ChangeTime.Unix()))
 		r.SendSpam(fmt.Sprintf("%s # %f # %s # Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
-	} else {
-		logger.Infof("Failed to revert")
-		revision := api.GetPage(logger, ctx, helpers.PageTitle(change.Common.Namespace, change.Common.Title))
-		if revision != nil {
-			if change.User.Username == revision.User {
-				metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "self_beaten"}).Inc()
-			} else {
-				metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "beaten"}).Inc()
-				change.RevertReason = fmt.Sprintf("Beaten by %s", revision.User)
-				db.ClueBot.MarkVandalismRevertBeaten(logger, ctx, mysqlVandalismId, change.Common.Title, change.GetDiffUrl(), revision.User)
-
-				r.SendRevert(fmt.Sprintf("%s (Not Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ReceivedTime.Unix()))
-				r.SendSpam(fmt.Sprintf("%s # %f # %s # Not Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
-			}
-		} else {
-			metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "failed"}).Inc()
-		}
+		return nil
 	}
+	logger.Infof("Failed to revert")
+	revision := api.GetPage(logger, ctx, helpers.PageTitle(change.Common.Namespace, change.Common.Title))
+	if revision != nil {
+		if change.User.Username == revision.User {
+			metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "self_beaten"}).Inc()
+		} else {
+			metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "beaten"}).Inc()
+			change.RevertReason = fmt.Sprintf("Beaten by %s", revision.User)
+			db.ClueBot.MarkVandalismRevertBeaten(logger, ctx, mysqlVandalismId, change.Common.Title, change.GetDiffUrl(), revision.User)
+
+			r.SendRevert(fmt.Sprintf("%s (Not Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ChangeTime.Unix()))
+			r.SendSpam(fmt.Sprintf("%s # %f # %s # Not Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
+		}
+		return nil
+	}
+
+	metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "failed"}).Inc()
 	return nil
 }
 
@@ -327,17 +328,19 @@ func ProcessRevertChangeEvents(wg *sync.WaitGroup, configuration *config.Configu
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
-		logger := change.Logger.WithField("function", "processor.ProcessRevertChangeEvents")
-
 		metrics.ProcessorsRevertInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "ProcessRevertChangeEvents")
+		func(changeEvent *model.ProcessEvent) {
+			change.EndActiveSpan()
+			logger := change.Logger.WithField("function", "processor.ProcessRevertChangeEvents")
 
-		if err := processSingleRevertChange(logger, ctx, change, configuration, db, r, api); err != nil {
-			logger.Error(err.Error())
-			span.SetStatus(codes.Error, err.Error())
-		}
+			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "ProcessRevertChangeEvents")
+			defer span.End()
 
-		span.End()
+			if err := processSingleRevertChange(logger, ctx, change, configuration, db, r, api); err != nil {
+				logger.Error(err.Error())
+				span.SetStatus(codes.Error, err.Error())
+			}
+		}(change)
 		metrics.ProcessorsRevertInUse.Dec()
 	}
 }

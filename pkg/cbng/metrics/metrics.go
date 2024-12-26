@@ -16,6 +16,7 @@ var PendingPageRecentEditCountLoader prometheus.Gauge
 var PendingPageRecentRevertCountLoader prometheus.Gauge
 var PendingUserEditCountLoader prometheus.Gauge
 var PendingUserWarnsCountLoader prometheus.Gauge
+var PendingUserRegistrationLoader prometheus.Gauge
 var PendingUserDistinctPagesCountLoader prometheus.Gauge
 var PendingRevisionLoader prometheus.Gauge
 var PendingScoringProcessor prometheus.Gauge
@@ -36,6 +37,7 @@ var LoaderPageMetadataInUse prometheus.Gauge
 var LoaderPageRecentEditCountInUse prometheus.Gauge
 var LoaderPageRecentRevertCountInUse prometheus.Gauge
 var LoaderUserEditCountInUse prometheus.Gauge
+var LoaderUserRegistrationInUse prometheus.Gauge
 var LoaderUserDistinctPageCountInUse prometheus.Gauge
 var LoaderUserWarnsCountInUse prometheus.Gauge
 var LoaderPageRevisionInUse prometheus.Gauge
@@ -55,6 +57,7 @@ func init() {
 	PendingPageRecentEditCountLoader = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "pending", "loader": "page_recent_edit_count"}})
 	PendingPageRecentRevertCountLoader = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "pending", "loader": "page_recent_revert_count"}})
 	PendingUserEditCountLoader = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "pending", "loader": "user_edit_count"}})
+	PendingUserRegistrationLoader = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "pending", "loader": "user_registration"}})
 	PendingUserDistinctPagesCountLoader = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "pending", "loader": "user_distinct_page_count"}})
 	PendingUserWarnsCountLoader = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "pending", "loader": "user_warns_count"}})
 	PendingRevisionLoader = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "pending", "loader": "page_revisions"}})
@@ -63,6 +66,7 @@ func init() {
 	LoaderPageRecentEditCountInUse = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "active", "loader": "page_recent_edit_count"}})
 	LoaderPageRecentRevertCountInUse = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "active", "loader": "page_recent_revert_count"}})
 	LoaderUserEditCountInUse = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "active", "loader": "user_edit_count"}})
+	LoaderUserRegistrationInUse = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "active", "loader": "user_registration"}})
 	LoaderUserDistinctPageCountInUse = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "active", "loader": "user_distinct_page_count"}})
 	LoaderUserWarnsCountInUse = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "active", "loader": "user_warns_count"}})
 	LoaderPageRevisionInUse = promauto.NewGauge(prometheus.GaugeOpts{Name: "cbng_loader", ConstLabels: prometheus.Labels{"status": "active", "loader": "page_revisions"}})

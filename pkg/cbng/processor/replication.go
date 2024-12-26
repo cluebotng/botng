@@ -44,14 +44,13 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 
 					for _, change := range pending {
 						func() {
-							_, span := metrics.OtelTracer.Start(change.TraceContext, "ReplicationWatcher")
-
-							defer span.End()
 							// If we're ignoring replication or are past the change in replication, kick off the process
-							if ignoreReplicationDelay || change.ReceivedTime.Unix() >= replicationPoint {
+							if ignoreReplicationDelay || change.ChangeTime.Unix() >= replicationPoint {
 								logger.Tracef("Change %v past replication point %v while pending (%v)", change.Uuid, replicationPoint, ignoreReplicationDelay)
 								metrics.EditStatus.With(prometheus.Labels{"state": "wait_for_replication", "status": "success"}).Inc()
 								metrics.ReplicationWatcherSuccess.Inc()
+
+								change.StartNewActiveSpan("pending.LoadPageMetadata")
 								outChangeFeed <- change
 								delete(pending, change.Uuid)
 								return
@@ -60,9 +59,10 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 							// If we've waited 2min, kill from pending
 							if time.Now().Unix()-120 > change.ReceivedTime.Unix() {
 								logger.WithFields(logrus.Fields{"uuid": change.Uuid}).Error("Change expired while pending")
-								span.SetStatus(codes.Error, "Timeout while waiting for replication")
 								metrics.EditStatus.With(prometheus.Labels{"state": "wait_for_replication", "status": "failed"}).Inc()
 								metrics.ReplicationWatcherTimout.Inc()
+
+								change.EndActiveSpanInError(codes.Error, "Timeout while waiting for replication")
 								delete(pending, change.Uuid)
 								return
 							}
@@ -80,15 +80,19 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 
 			// Trigger the specific instances, if required
 			if change.Common.Title == configuration.Instances.AngryOptInConfiguration.GetPageName() {
+				logger.Infof("Triggering Angry Opt-in reload")
 				configuration.Instances.AngryOptInConfiguration.TriggerReload()
 			}
 			if change.Common.Title == configuration.Instances.Run.GetPageName() {
+				logger.Infof("Triggering Run reload")
 				configuration.Instances.Run.TriggerReload()
 			}
 			if change.Common.Title == configuration.Instances.NamespaceOptIn.GetPageName() {
+				logger.Infof("Triggering Namespace Opt-in reload")
 				configuration.Instances.NamespaceOptIn.TriggerReload()
 			}
 			if change.Common.Title == configuration.Instances.TFA.GetPageName() {
+				logger.Infof("Triggering TFA reload")
 				configuration.Instances.TFA.TriggerReload()
 			}
 		}

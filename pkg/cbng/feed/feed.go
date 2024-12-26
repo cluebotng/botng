@@ -33,6 +33,7 @@ type httpChangeEvent struct {
 	Type        string
 	Namespace   string `json:"-"`
 	NamespaceId int64  `json:"namespace"`
+	Timestamp   int64
 	Title       string
 	Comment     string
 	User        string
@@ -77,8 +78,12 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 		changeUUID := uuid.NewV4().String()
 		metrics.FeedStatus.With(prometheus.Labels{"status": "received"}).Inc()
 
+		receivedTime := time.Now().UTC()
+		changeTime := time.Unix(httpChange.Timestamp, 0)
+
 		_, span := metrics.OtelTracer.Start(context.Background(), "handleEdit")
 		span.SetAttributes(attribute.String("uuid", changeUUID))
+		span.SetAttributes(attribute.Int64("time_until_received", receivedTime.Unix()-changeTime.Unix()))
 		defer span.End()
 
 		change := model.ProcessEvent{
@@ -91,8 +96,10 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 				}),
 			),
 			Logger:       logger.WithFields(logrus.Fields{"uuid": changeUUID}),
+			ActiveSpan:   nil,
 			Uuid:         changeUUID,
-			ReceivedTime: time.Now().UTC(),
+			ReceivedTime: receivedTime,
+			ChangeTime:   changeTime,
 			Common: model.ProcessEventCommon{
 				Namespace:   namespace,
 				NamespaceId: httpChange.NamespaceId,
@@ -115,6 +122,8 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 		// Otherwise send for processing
 		logger.WithFields(logrus.Fields{"uuid": change.Uuid, "change": change}).Debug("Received new event")
 		metrics.EditStatus.With(prometheus.Labels{"state": "received_new", "status": "success"}).Inc()
+
+		change.StartNewActiveSpan("pending.Replication")
 		changeFeed <- &change
 	}
 }

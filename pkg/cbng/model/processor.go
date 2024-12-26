@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/helpers"
+	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"time"
 )
 
@@ -36,8 +39,10 @@ type ProcessEventUser struct {
 type ProcessEvent struct {
 	TraceContext   context.Context
 	Logger         *logrus.Entry
+	ActiveSpan     *trace.Span
 	Uuid           string
 	ReceivedTime   time.Time
+	ChangeTime     time.Time
 	Attempts       int32
 	User           ProcessEventUser
 	Comment        string
@@ -45,8 +50,27 @@ type ProcessEvent struct {
 	Common         ProcessEventCommon
 	Current        ProcessEventRevision
 	Previous       ProcessEventRevision
-	VandalismScore float32
+	VandalismScore float64
 	RevertReason   string
+}
+
+func (pe *ProcessEvent) EndActiveSpan() {
+	if pe.ActiveSpan != nil {
+		(*pe.ActiveSpan).End()
+	}
+}
+
+func (pe *ProcessEvent) EndActiveSpanInError(code codes.Code, description string) {
+	if pe.ActiveSpan != nil {
+		(*pe.ActiveSpan).SetStatus(code, description)
+		(*pe.ActiveSpan).End()
+	}
+}
+
+func (pe *ProcessEvent) StartNewActiveSpan(spanName string) {
+	pe.EndActiveSpan()
+	_, pendingSpan := metrics.OtelTracer.Start(pe.TraceContext, spanName)
+	pe.ActiveSpan = &pendingSpan
 }
 
 func (pe *ProcessEvent) FormatIrcRevert() string {

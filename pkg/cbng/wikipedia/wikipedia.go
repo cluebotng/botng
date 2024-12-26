@@ -323,9 +323,9 @@ func (w *WikipediaApi) GetPage(l *logrus.Entry, ctx context.Context, name string
 	return nil
 }
 
-func (w *WikipediaApi) getRollbackToken(l *logrus.Entry) *string {
+func (w *WikipediaApi) getRollbackToken(l *logrus.Entry, ctx context.Context) *string {
 	logger := l.WithField("function", "wikipedia.WikipediaApi.getRollbackToken")
-	_, span := metrics.OtelTracer.Start(context.Background(), "wikipedia.getRollbackToken")
+	_, span := metrics.OtelTracer.Start(ctx, "wikipedia.getRollbackToken")
 	defer span.End()
 
 	logger.Tracef("Starting request")
@@ -375,7 +375,7 @@ func (w *WikipediaApi) getCsrfToken(l *logrus.Entry, ctx context.Context) *strin
 	return &token
 }
 
-func (w *WikipediaApi) Rollback(l *logrus.Entry, ctx context.Context, title, user, comment string) bool {
+func (w *WikipediaApi) Rollback(l *logrus.Entry, parentCtx context.Context, title, user, comment string) bool {
 	logger := l.WithFields(logrus.Fields{
 		"function": "wikipedia.WikipediaApi.Rollback",
 		"args": map[string]interface{}{
@@ -384,10 +384,10 @@ func (w *WikipediaApi) Rollback(l *logrus.Entry, ctx context.Context, title, use
 			"comment": comment,
 		},
 	})
-	_, span := metrics.OtelTracer.Start(ctx, "wikipedia.Rollback")
+	ctx, span := metrics.OtelTracer.Start(parentCtx, "wikipedia.Rollback")
 	defer span.End()
 
-	rollbackToken := w.getRollbackToken(logger)
+	rollbackToken := w.getRollbackToken(logger, ctx)
 	if rollbackToken == nil {
 		logger.Infof("Failed to get token for rolling back %v (%v)", title, user)
 		return false
