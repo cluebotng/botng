@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
-	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/cluebotng/botng/pkg/cbng/relay"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"sync"
 )
@@ -32,8 +30,8 @@ func isWhitelisted(l *logrus.Entry, configuration *config.Configuration, user st
 	return false
 }
 
-func processSingleScoringChange(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, outChangeFeed chan *model.ProcessEvent) error {
-	isVandalism, err := isVandalism(logger, ctx, configuration, db, change)
+func processSingleScoringChange(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, configuration *config.Configuration, r *relay.Relays, outChangeFeed chan *model.ProcessEvent) error {
+	isVandalism, err := isVandalism(logger, ctx, configuration, change)
 	if err != nil {
 		metrics.EditStatus.With(prometheus.Labels{"state": "score_edit", "status": "failed_to_classify"}).Inc()
 		return fmt.Errorf("failed to score vandalism: %v", err)
@@ -58,17 +56,16 @@ func processSingleScoringChange(logger *logrus.Entry, ctx context.Context, chang
 	return nil
 }
 
-func ProcessScoringChangeEvents(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed chan *model.ProcessEvent, outChangeFeed chan *model.ProcessEvent) {
+func ProcessScoringChangeEvents(wg *sync.WaitGroup, configuration *config.Configuration, r *relay.Relays, inChangeFeed chan *model.ProcessEvent, outChangeFeed chan *model.ProcessEvent) {
 	logger := logrus.WithField("function", "processor.ProcessScoringChangeEvents")
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.ProcessorsScoringInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "processor.ProcessScoringChangeEvents")
-		span.SetAttributes(attribute.String("uuid", change.Uuid))
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "ProcessScoringChangeEvents")
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
-		if err := processSingleScoringChange(logger, ctx, change, configuration, db, r, outChangeFeed); err != nil {
+		if err := processSingleScoringChange(logger, ctx, change, configuration, r, outChangeFeed); err != nil {
 			logger.Error(err.Error())
 			span.SetStatus(codes.Error, err.Error())
 			r.SendDebug(fmt.Sprintf("%v # Failed to score change", change.FormatIrcChange()))

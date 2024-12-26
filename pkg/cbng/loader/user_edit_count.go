@@ -10,7 +10,6 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/relay"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"sync"
 )
@@ -46,8 +45,7 @@ func LoadUserEditCount(wg *sync.WaitGroup, configuration *config.Configuration, 
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderUserEditCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadUserEditCount")
-		span.SetAttributes(attribute.String("uuid", change.Uuid))
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserEditCount")
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := loadSingleUserEditCount(logger, ctx, change, configuration, db, outChangeFeed); err != nil {

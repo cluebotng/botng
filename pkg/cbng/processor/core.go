@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
-	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/sirupsen/logrus"
@@ -79,42 +78,33 @@ func generateXML(pe *model.ProcessEvent) ([]byte, error) {
 	return xml.Marshal(data)
 }
 
-func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *config.Configuration, db *database.DatabaseConnection, pe *model.ProcessEvent) (bool, error) {
+func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *config.Configuration, pe *model.ProcessEvent) (bool, error) {
 	logger := l.WithField("function", "processor.isVandalism")
-	ctx, parentSpan := metrics.OtelTracer.Start(parentCtx, "core.isVandalism")
-	defer parentSpan.End()
+	_, span := metrics.OtelTracer.Start(parentCtx, "core.isVandalism")
+	defer span.End()
 
-	coreHost := configuration.Core.Host
-	if coreHost == "" {
-		coreHost = db.ClueBot.GetServiceHost(logger, "core")
-	}
-
-	_, XmlSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.generateXML")
 	xmlData, err := generateXML(pe)
 	if err != nil {
-		XmlSpan.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Could not generate xml: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 		return false, err
 	}
-	XmlSpan.End()
 	logger = logger.WithField("request", xmlData)
 
-	coreUrl := fmt.Sprintf("%s:%d", coreHost, configuration.Core.Port)
+	coreUrl := fmt.Sprintf("%s:%d", configuration.Core.Host, configuration.Core.Port)
 	logger.Tracef("Connecting to %v", coreUrl)
 
-	_, scoreSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score")
-	defer scoreSpan.End()
 	dialer := net.Dialer{Timeout: time.Second * 5}
 	conn, err := dialer.Dial("tcp", coreUrl)
 	if err != nil {
-		scoreSpan.SetStatus(codes.Error, err.Error())
+		span.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Could not connect (%v): %v", coreUrl, err)
 		return false, err
 	}
 	defer conn.Close()
 
 	if _, err := conn.Write(xmlData); err != nil {
-		scoreSpan.SetStatus(codes.Error, err.Error())
+		span.SetStatus(codes.Error, err.Error())
 		logger.Infof("Could not write payload: %v", err)
 		return false, err
 	}
@@ -123,7 +113,7 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	for {
 		n, err := conn.Read(tmp)
 		if err != nil {
-			scoreSpan.SetStatus(codes.Error, err.Error())
+			span.SetStatus(codes.Error, err.Error())
 			logger.Warnf("Could not read response: %v", err)
 			return false, err
 		}
@@ -133,14 +123,11 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 			break
 		}
 	}
-	scoreSpan.End()
 	logger = logger.WithField("response", response)
 
-	_, scoreDecodeSpan := metrics.OtelTracer.Start(ctx, "core.isVandalism.score.decode")
-	defer scoreDecodeSpan.End()
 	editSet := model.WPEditScoreSet{}
 	if err := xml.Unmarshal(response, &editSet); err != nil {
-		scoreDecodeSpan.SetStatus(codes.Error, err.Error())
+		span.SetStatus(codes.Error, err.Error())
 		logger.Warnf("Could not decode response: %v", err)
 		return false, err
 	}

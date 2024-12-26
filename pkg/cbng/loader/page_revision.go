@@ -10,7 +10,6 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"sync"
 )
@@ -52,8 +51,7 @@ func LoadPageRevision(wg *sync.WaitGroup, api *wikipedia.WikipediaApi, r *relay.
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderPageRevisionInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadPageRevision")
-		span.SetAttributes(attribute.String("uuid", change.Uuid))
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageRevision")
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := loadSinglePageRevision(logger, ctx, change, api, outChangeFeed); err != nil {

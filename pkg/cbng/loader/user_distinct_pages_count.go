@@ -10,7 +10,6 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/relay"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"sync"
 )
@@ -36,8 +35,7 @@ func LoadDistinctPagesCount(wg *sync.WaitGroup, configuration *config.Configurat
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderUserDistinctPageCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadDistinctPagesCount")
-		span.SetAttributes(attribute.String("uuid", change.Uuid))
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadDistinctPagesCount")
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := loadSingleDistinctPagesCount(logger, ctx, change, configuration, db, outChangeFeed); err != nil {

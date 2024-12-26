@@ -11,7 +11,6 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/relay"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"sync"
 )
@@ -36,8 +35,7 @@ func LoadPageRecentRevertCount(wg *sync.WaitGroup, configuration *config.Configu
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderPageRecentRevertCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "loader.LoadPageRecentRevertCount")
-		span.SetAttributes(attribute.String("uuid", change.Uuid))
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageRecentRevertCount")
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := loadSinglePageRecentRevertCount(logger, ctx, change, configuration, db, outChangeFeed); err != nil {

@@ -12,7 +12,6 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"regexp"
 	"strings"
@@ -245,7 +244,12 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 	}
 
 	// If we reverted this user/page before in the last 24 hours, don't
-	lastRevertTime := db.ClueBot.GetLastRevertTime(logger, ctx, change.Common.Title, change.User.Username)
+	lastRevertTime, err := db.ClueBot.GetLastRevertTime(logger, ctx, change.Common.Title, change.User.Username)
+	if err != nil {
+		change.RevertReason = "Database error"
+		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "database_error"}).Inc()
+		return false
+	}
 	if lastRevertTime != 0 && lastRevertTime > time.Now().UTC().Unix()-config.RecentRevertThreshold {
 		change.RevertReason = "Reverted before"
 		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "recent_revert"}).Inc()
@@ -325,8 +329,7 @@ func ProcessRevertChangeEvents(wg *sync.WaitGroup, configuration *config.Configu
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.ProcessorsRevertInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "processor.ProcessRevertChangeEvents")
-		span.SetAttributes(attribute.String("uuid", change.Uuid))
+		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "ProcessRevertChangeEvents")
 
 		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := processSingleRevertChange(logger, ctx, change, configuration, db, r, api); err != nil {

@@ -7,7 +7,6 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"sync"
 	"time"
@@ -45,8 +44,8 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 
 					for _, change := range pending {
 						func() {
-							_, span := metrics.OtelTracer.Start(change.TraceContext, "replication.ReplicationWatcher.pending.change")
-							span.SetAttributes(attribute.String("uuid", change.Uuid))
+							_, span := metrics.OtelTracer.Start(change.TraceContext, "ReplicationWatcher")
+
 							defer span.End()
 							// If we're ignoring replication or are past the change in replication, kick off the process
 							if ignoreReplicationDelay || change.ReceivedTime.Unix() >= replicationPoint {

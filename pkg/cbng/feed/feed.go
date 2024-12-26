@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"strings"
@@ -73,8 +74,11 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 			return
 		}
 
+		changeUUID := uuid.NewV4().String()
 		metrics.FeedStatus.With(prometheus.Labels{"status": "received"}).Inc()
-		_, span := metrics.OtelTracer.Start(context.Background(), "feed.handleLine")
+
+		_, span := metrics.OtelTracer.Start(context.Background(), "handleEdit")
+		span.SetAttributes(attribute.String("uuid", changeUUID))
 		defer span.End()
 
 		change := model.ProcessEvent{
@@ -86,7 +90,7 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 					TraceFlags: trace.FlagsSampled,
 				}),
 			),
-			Uuid:         uuid.NewV4().String(),
+			Uuid:         changeUUID,
 			ReceivedTime: time.Now().UTC(),
 			Common: model.ProcessEventCommon{
 				Namespace:   namespace,
