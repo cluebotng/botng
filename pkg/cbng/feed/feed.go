@@ -90,6 +90,7 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 					TraceFlags: trace.FlagsSampled,
 				}),
 			),
+			Logger:       logger.WithFields(logrus.Fields{"uuid": changeUUID}),
 			Uuid:         changeUUID,
 			ReceivedTime: time.Now().UTC(),
 			Common: model.ProcessEventCommon{

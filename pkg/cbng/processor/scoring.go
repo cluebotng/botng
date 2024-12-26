@@ -57,14 +57,14 @@ func processSingleScoringChange(logger *logrus.Entry, ctx context.Context, chang
 }
 
 func ProcessScoringChangeEvents(wg *sync.WaitGroup, configuration *config.Configuration, r *relay.Relays, inChangeFeed chan *model.ProcessEvent, outChangeFeed chan *model.ProcessEvent) {
-	logger := logrus.WithField("function", "processor.ProcessScoringChangeEvents")
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
+		logger := change.Logger.WithField("function", "processor.ProcessScoringChangeEvents")
+
 		metrics.ProcessorsScoringInUse.Inc()
 		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "ProcessScoringChangeEvents")
 
-		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := processSingleScoringChange(logger, ctx, change, configuration, r, outChangeFeed); err != nil {
 			logger.Error(err.Error())
 			span.SetStatus(codes.Error, err.Error())

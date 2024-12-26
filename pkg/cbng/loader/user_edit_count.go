@@ -39,15 +39,14 @@ func loadSingleUserEditCount(logger *logrus.Entry, ctx context.Context, change *
 }
 
 func LoadUserEditCount(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
-	logger := logrus.WithField("function", "loader.LoadUserEditCount")
-
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
+		logger := change.Logger.WithField("function", "loader.LoadUserEditCount")
+
 		metrics.LoaderUserEditCountInUse.Inc()
 		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserEditCount")
 
-		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := loadSingleUserEditCount(logger, ctx, change, configuration, db, outChangeFeed); err != nil {
 			logger.Error(err.Error())
 			span.SetStatus(codes.Error, err.Error())

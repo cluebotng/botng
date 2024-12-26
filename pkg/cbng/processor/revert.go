@@ -324,14 +324,14 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 }
 
 func ProcessRevertChangeEvents(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, api *wikipedia.WikipediaApi, inChangeFeed chan *model.ProcessEvent) {
-	logger := logrus.WithField("function", "processor.ProcessRevertChangeEvents")
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
+		logger := change.Logger.WithField("function", "processor.ProcessRevertChangeEvents")
+
 		metrics.ProcessorsRevertInUse.Inc()
 		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "ProcessRevertChangeEvents")
 
-		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := processSingleRevertChange(logger, ctx, change, configuration, db, r, api); err != nil {
 			logger.Error(err.Error())
 			span.SetStatus(codes.Error, err.Error())

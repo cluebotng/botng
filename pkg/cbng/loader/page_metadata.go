@@ -31,7 +31,6 @@ func loadSinglePageMetadata(logger *logrus.Entry, ctx context.Context, change *m
 }
 
 func LoadPageMetadata(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
-	logger := logrus.WithField("function", "loader.LoadPageMetadata")
 	wg.Add(1)
 	defer wg.Done()
 	for {
@@ -39,7 +38,7 @@ func LoadPageMetadata(wg *sync.WaitGroup, configuration *config.Configuration, d
 		metrics.LoaderPageMetadataInUse.Inc()
 		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageMetadata")
 
-		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
+		logger := change.Logger.WithField("function", "loader.LoadPageMetadata")
 		if err := loadSinglePageMetadata(logger, ctx, change, configuration, db, outChangeFeed); err != nil {
 			logger.Error(err.Error())
 			span.SetStatus(codes.Error, err.Error())

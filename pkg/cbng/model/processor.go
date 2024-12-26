@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/helpers"
+	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -34,6 +35,7 @@ type ProcessEventUser struct {
 
 type ProcessEvent struct {
 	TraceContext   context.Context
+	Logger         *logrus.Entry
 	Uuid           string
 	ReceivedTime   time.Time
 	Attempts       int32

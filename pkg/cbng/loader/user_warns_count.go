@@ -30,14 +30,14 @@ func loadSingleUserWarnsCount(logger *logrus.Entry, ctx context.Context, change 
 }
 
 func LoadUserWarnsCount(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
-	logger := logrus.WithField("function", "loader.LoadUserWarnsCount")
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
+		logger := change.Logger.WithField("function", "loader.LoadUserWarnsCount")
+
 		metrics.LoaderUserWarnsCountInUse.Inc()
 		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserWarnsCount")
 
-		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := loadSingleUserWarnsCount(logger, ctx, change, configuration, db, outChangeFeed); err != nil {
 			logger.Error(err.Error())
 			span.SetStatus(codes.Error, err.Error())

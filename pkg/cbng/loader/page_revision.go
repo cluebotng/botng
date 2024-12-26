@@ -46,14 +46,14 @@ func loadSinglePageRevision(logger *logrus.Entry, ctx context.Context, change *m
 }
 
 func LoadPageRevision(wg *sync.WaitGroup, api *wikipedia.WikipediaApi, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
-	logger := logrus.WithField("function", "loader.LoadPageRevision")
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
+		logger := change.Logger.WithField("function", "loader.LoadPageRevision")
+
 		metrics.LoaderPageRevisionInUse.Inc()
 		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageRevision")
 
-		logger = logger.WithFields(logrus.Fields{"uuid": change.Uuid})
 		if err := loadSinglePageRevision(logger, ctx, change, api, outChangeFeed); err != nil {
 			logger.Error(err.Error())
 			span.SetStatus(codes.Error, err.Error())
