@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
 	"reflect"
@@ -51,7 +52,10 @@ func (a *AngryOptInConfigurationInstance) start(wg *sync.WaitGroup) {
 func (a *AngryOptInConfigurationInstance) reload() {
 	logger := logrus.WithField("function", "config.AngryOptInConfigurationInstance.reload")
 
-	revision := a.w.GetPage(logger, context.Background(), a.GetPageName())
+	ctx, span := metrics.OtelTracer.Start(context.Background(), "AngryOptInConfigurationReload")
+	defer span.End()
+
+	revision := a.w.GetPage(logger, ctx, a.GetPageName())
 	if revision != nil {
 		pages := []string{}
 		for _, line := range strings.Split(revision.Data, "\n") {

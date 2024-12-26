@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
 	"strings"
@@ -49,7 +50,10 @@ func (r *RunInstance) start(wg *sync.WaitGroup) {
 func (r *RunInstance) reload() {
 	logger := logrus.WithField("function", "config.RunInstance.reload")
 
-	revision := r.w.GetPage(logger, context.Background(), r.GetPageName())
+	ctx, span := metrics.OtelTracer.Start(context.Background(), "RunConfigurationReload")
+	defer span.End()
+
+	revision := r.w.GetPage(logger, ctx, r.GetPageName())
 	if revision != nil {
 		shouldRun := false
 		if strings.Contains(strings.ToLower(revision.Data), "true") {

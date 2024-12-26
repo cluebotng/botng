@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
 	"regexp"
@@ -49,7 +50,10 @@ func (t *TFAInstance) start(wg *sync.WaitGroup) {
 func (t *TFAInstance) reload() {
 	logger := logrus.WithField("function", "config.TFAInstance.reload")
 
-	revision := t.w.GetPage(logger, context.Background(), t.GetPageName())
+	ctx, span := metrics.OtelTracer.Start(context.Background(), "TFAConfigurationReload")
+	defer span.End()
+
+	revision := t.w.GetPage(logger, ctx, t.GetPageName())
 	if revision != nil {
 		article := regexp.MustCompile(`{{TFAFULL\|([^}]+)}}`).FindAllStringSubmatch(revision.Data, 1)
 		if len(article) != 1 {

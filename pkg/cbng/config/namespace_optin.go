@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
 	"reflect"
@@ -51,7 +52,10 @@ func (n *NamespaceOptInInstance) start(wg *sync.WaitGroup) {
 func (n *NamespaceOptInInstance) reload() {
 	logger := logrus.WithField("function", "config.NamespaceOptInInstance.reload")
 
-	revision := n.w.GetPage(logger, context.Background(), n.GetPageName())
+	ctx, span := metrics.OtelTracer.Start(context.Background(), "NamespaceConfigurationReload")
+	defer span.End()
+
+	revision := n.w.GetPage(logger, ctx, n.GetPageName())
 	if revision != nil {
 		pages := []string{}
 		for _, line := range strings.Split(revision.Data, "\n") {

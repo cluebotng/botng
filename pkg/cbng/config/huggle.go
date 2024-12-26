@@ -1,6 +1,8 @@
 package config
 
 import (
+	"context"
+	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/sirupsen/logrus"
 	"io"
@@ -45,6 +47,9 @@ func (h *HuggleConfigurationInstance) start(wg *sync.WaitGroup) {
 
 func (h *HuggleConfigurationInstance) reload() {
 	logger := logrus.WithField("function", "config.HuggleConfigurationInstance.reload")
+
+	_, span := metrics.OtelTracer.Start(context.Background(), "HuggleConfigurationReload")
+	defer span.End()
 
 	response, err := http.Get("https://huggle.bena.rocks/?action=read&wp=en.wikipedia.org")
 	if err != nil {
