@@ -32,7 +32,7 @@ import (
 	"time"
 )
 
-func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays, db *database.DatabaseConnection) {
+func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserRegistrationLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays, db *database.DatabaseConnection) {
 	wg.Add(1)
 	defer wg.Done()
 
@@ -43,6 +43,7 @@ func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditC
 		metrics.PendingPageRecentRevertCountLoader.Set(float64(len(toPageRecentRevertCountLoader)))
 		metrics.PendingUserEditCountLoader.Set(float64(len(toUserEditCountLoader)))
 		metrics.PendingUserWarnsCountLoader.Set(float64(len(toUserWarnsCountLoader)))
+		metrics.PendingUserRegistrationLoader.Set(float64(len(toUserRegistrationLoader)))
 		metrics.PendingUserDistinctPagesCountLoader.Set(float64(len(toUserDistinctPagesCountLoader)))
 		metrics.PendingRevisionLoader.Set(float64(len(toRevisionLoader)))
 		metrics.PendingScoringProcessor.Set(float64(len(toScoringProcessor)))
@@ -199,6 +200,7 @@ func main() {
 	toPageRecentEditCountLoader := make(chan *model.ProcessEvent, 10000)
 	toPageRecentRevertCountLoader := make(chan *model.ProcessEvent, 10000)
 	toUserEditCountLoader := make(chan *model.ProcessEvent, 10000)
+	toUserRegistrationLoader := make(chan *model.ProcessEvent, 10000)
 	toUserWarnsCountLoader := make(chan *model.ProcessEvent, 10000)
 	toUserDistinctPagesCountLoader := make(chan *model.ProcessEvent, 10000)
 	toRevisionLoader := make(chan *model.ProcessEvent, 10000)
@@ -206,7 +208,7 @@ func main() {
 	toScoringProcessor := make(chan *model.ProcessEvent, 10000)
 	toRevertProcessor := make(chan *model.ProcessEvent, 10000)
 
-	go RunMetricPoller(&wg, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r, db)
+	go RunMetricPoller(&wg, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserRegistrationLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r, db)
 	go RunDatabasePurger(&wg, db)
 
 	go feed.ConsumeHttpChangeEvents(&wg, configuration, toReplicationWatcher)
@@ -216,7 +218,8 @@ func main() {
 		go loader.LoadPageMetadata(&wg, configuration, db, r, toPageMetadataLoader, toPageRecentEditCountLoader)
 		go loader.LoadPageRecentEditCount(&wg, configuration, db, r, toPageRecentEditCountLoader, toPageRecentRevertCountLoader)
 		go loader.LoadPageRecentRevertCount(&wg, configuration, db, r, toPageRecentRevertCountLoader, toUserEditCountLoader)
-		go loader.LoadUserEditCount(&wg, configuration, db, r, toUserEditCountLoader, toUserWarnsCountLoader)
+		go loader.LoadUserEditCount(&wg, configuration, db, r, toUserEditCountLoader, toUserRegistrationLoader)
+		go loader.LoadUserRegistrationTime(&wg, configuration, db, r, toUserRegistrationLoader, toUserWarnsCountLoader)
 		go loader.LoadDistinctPagesCount(&wg, configuration, db, r, toUserWarnsCountLoader, toUserDistinctPagesCountLoader)
 		go loader.LoadUserWarnsCount(&wg, configuration, db, r, toUserDistinctPagesCountLoader, toRevisionLoader)
 	}

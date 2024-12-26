@@ -11,49 +11,42 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/codes"
+	"net"
 	"sync"
 )
-
-func loadSingleUserEditCount(logger *logrus.Entry, ctx context.Context, change *model.ProcessEvent, configuration *config.Configuration, db *database.DatabaseConnection, outChangeFeed chan *model.ProcessEvent) error {
-
-	// Load the user edit count
-	userEditCount, err := db.Replica.GetUserEditCount(logger, ctx, change.User.Username)
-	if err != nil {
-		metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_edit_count", "status": "failed"}).Inc()
-		return err
-	}
-	metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_edit_count", "status": "success"}).Inc()
-
-	// Load the user registration time
-	userRegTime, err := db.Replica.GetUserRegistrationTime(logger, ctx, change.User.Username)
-	if err != nil {
-		metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_registration_time", "status": "failed"}).Inc()
-		return err
-	}
-	metrics.EditStatus.With(prometheus.Labels{"state": "lookup_user_registration_time", "status": "success"}).Inc()
-
-	change.User.EditCount = userEditCount
-	change.User.RegistrationTime = userRegTime
-	outChangeFeed <- change
-	return nil
-}
 
 func LoadUserEditCount(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
 	wg.Add(1)
 	defer wg.Done()
 	for change := range inChangeFeed {
-		logger := change.Logger.WithField("function", "loader.LoadUserEditCount")
-
 		metrics.LoaderUserEditCountInUse.Inc()
-		ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserEditCount")
+		func(changeEvent *model.ProcessEvent) {
+			change.EndActiveSpan()
+			logger := change.Logger.WithField("function", "loader.LoadUserEditCount")
 
-		if err := loadSingleUserEditCount(logger, ctx, change, configuration, db, outChangeFeed); err != nil {
-			logger.Error(err.Error())
-			span.SetStatus(codes.Error, err.Error())
-			r.SendDebug(fmt.Sprintf("%v # Failed to get user edit count", change.FormatIrcChange()))
-		}
+			ctx, span := metrics.OtelTracer.Start(change.TraceContext, "LoadUserEditCount")
+			defer span.End()
 
-		span.End()
+			var f func(l *logrus.Entry, parentCtx context.Context, user string) (int64, error)
+			if net.ParseIP(change.User.Username) != nil {
+				f = db.Replica.GetAnonymousUserEditCount
+			} else {
+				f = db.Replica.GetRegisteredUserEditCount
+			}
+
+			userEditCount, err := f(logger, ctx, change.User.Username)
+			if err != nil {
+				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_anonymous_user_edit_count", "status": "failed"}).Inc()
+				logger.Error(err.Error())
+				span.SetStatus(codes.Error, err.Error())
+				r.SendDebug(fmt.Sprintf("%v # Failed to get user edit count", change.FormatIrcChange()))
+			} else {
+				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_anonymous_user_edit_count", "status": "success"}).Inc()
+				change.User.EditCount = userEditCount
+				change.StartNewActiveSpan("pending.LoadUserRegistrationTime")
+				outChangeFeed <- change
+			}
+		}(change)
 		metrics.LoaderUserEditCountInUse.Dec()
 	}
 }
