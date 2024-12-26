@@ -18,11 +18,3 @@ func NewDatabaseConnection(configuration *config.Configuration) *DatabaseConnect
 	}
 	return &c
 }
-
-func (dbc *DatabaseConnection) Disconnect() {
-	dbc.Replica.DisconnectFromDatabase()
-}
-
-func (dbc *DatabaseConnection) UpdateMetrics() {
-	dbc.Replica.UpdateMetrics()
-}

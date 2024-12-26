@@ -25,25 +25,17 @@ type WikipediaConfiguration struct {
 	Host     string
 }
 
-type CluebotSqlConfiguration struct {
-	Username string
-	Password string
-	Host     string
-	Port     int
-	Schema   string
-}
-
-type ReplicaSqlConfiguration struct {
-	Host     string
-	Port     int
-	Schema   string
-	Username string
-	Password string
-}
-
 type SqlConfiguration struct {
-	Replica []ReplicaSqlConfiguration
-	Cluebot CluebotSqlConfiguration
+	Username string
+	Password string
+	Host     string
+	Port     int
+	Schema   string
+}
+
+type SqlInstanceConfiguration struct {
+	Replica SqlConfiguration
+	Cluebot SqlConfiguration
 }
 
 type DynamicConfiguration struct {
@@ -92,7 +84,7 @@ type Configuration struct {
 	}
 	Bot       BotConfiguration
 	Wikipedia WikipediaConfiguration
-	Sql       SqlConfiguration
+	Sql       SqlInstanceConfiguration
 	Dynamic   DynamicConfiguration
 	Instances Instances
 	Irc       IrcConfiguration

@@ -51,8 +51,6 @@ func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditC
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "debug"}).Set(float64(r.GetPendingDebugMessages()))
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "revert"}).Set(float64(r.GetPendingRevertMessages()))
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "spam"}).Set(float64(r.GetPendingSpamMessages()))
-
-		db.UpdateMetrics()
 	}
 }
 
@@ -67,7 +65,7 @@ func RunDatabasePurger(wg *sync.WaitGroup, db *database.DatabaseConnection) {
 }
 
 func setupTracing(configuration *config.Configuration, debugMetrics bool) {
-	if configuration.Honey.SampleRate < 1 {
+	if configuration.Honey.SampleRate > 0 && configuration.Honey.SampleRate < 1 {
 		for k, v := range map[string]string{
 			"OTEL_TRACES_SAMPLER":      "traceidratio",
 			"OTEL_TRACES_SAMPLER_ARG":  fmt.Sprintf("%.2f", configuration.Honey.SampleRate),
@@ -88,7 +86,7 @@ func setupTracing(configuration *config.Configuration, debugMetrics bool) {
 		logrus.Fatalf("failed to init otlptrace provider: %s", err)
 	}
 
-	opts := []trace.TracerProviderOption{
+	traceProviderOptions := []trace.TracerProviderOption{
 		trace.WithResource(traceResource),
 	}
 	if configuration.Honey.Key != "" {
@@ -106,9 +104,8 @@ func setupTracing(configuration *config.Configuration, debugMetrics bool) {
 		if err != nil {
 			logrus.Fatalf("failed to init otlptrace provider: %s", err)
 		}
-
 		bsp := trace.NewBatchSpanProcessor(spanExporter)
-		opts = append(opts, trace.WithSpanProcessor(bsp))
+		traceProviderOptions = append(traceProviderOptions, trace.WithSpanProcessor(bsp))
 	}
 
 	if debugMetrics {
@@ -116,11 +113,11 @@ func setupTracing(configuration *config.Configuration, debugMetrics bool) {
 		if err != nil {
 			logrus.Fatalf("failed to init stdouttrace provider: %e", err)
 		}
-		ssp := trace.NewBatchSpanProcessor(spanExporter)
-		opts = append(opts, trace.WithSpanProcessor(ssp))
+		bsp := trace.NewBatchSpanProcessor(spanExporter)
+		traceProviderOptions = append(traceProviderOptions, trace.WithSpanProcessor(bsp))
 	}
 
-	tp := trace.NewTracerProvider(opts...)
+	tp := trace.NewTracerProvider(traceProviderOptions...)
 	otel.SetTracerProvider(tp)
 }
 
@@ -195,7 +192,6 @@ func main() {
 
 	r := relay.NewRelays(&wg, useIrcRelay, configuration.Irc.Server, configuration.Irc.Port, configuration.Irc.Username, configuration.Irc.Password, configuration.Irc.Channel)
 	db := database.NewDatabaseConnection(configuration)
-	defer db.Disconnect()
 
 	// Processing channels
 	toReplicationWatcher := make(chan *model.ProcessEvent, 10000)
@@ -230,7 +226,7 @@ func main() {
 	}
 
 	for i := 0; i < processors; i++ {
-		go processor.ProcessScoringChangeEvents(&wg, configuration, db, r, toScoringProcessor, toRevertProcessor)
+		go processor.ProcessScoringChangeEvents(&wg, configuration, r, toScoringProcessor, toRevertProcessor)
 		go processor.ProcessRevertChangeEvents(&wg, configuration, db, r, api, toRevertProcessor)
 	}
 
