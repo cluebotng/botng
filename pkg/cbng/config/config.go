@@ -34,7 +34,7 @@ type SqlConfiguration struct {
 }
 
 type SqlInstanceConfiguration struct {
-	Replica SqlConfiguration
+	Replica []SqlConfiguration
 	Cluebot SqlConfiguration
 }
 

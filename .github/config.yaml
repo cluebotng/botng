@@ -22,10 +22,10 @@ irc:
 
 sql:
   replica:
-    host: 127.0.0.1
-    port: 3306
-    schema: enwiki_p
-    username: root
+    - host: 127.0.0.1
+      port: 3306
+      schema: enwiki_p
+      username: root
   cluebot:
     host: 127.0.0.1
     port: 3306

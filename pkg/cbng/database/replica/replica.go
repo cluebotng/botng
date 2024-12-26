@@ -7,16 +7,17 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"
+	"math/rand"
 	"net"
 	"strings"
 )
 
 type ReplicaInstance struct {
-	cfg config.SqlConfiguration
+	instances []config.SqlConfiguration
 }
 
 func NewReplicaInstance(configuration *config.Configuration) *ReplicaInstance {
-	ri := ReplicaInstance{cfg: configuration.Sql.Replica}
+	ri := ReplicaInstance{instances: configuration.Sql.Replica}
 	return &ri
 }
 
@@ -25,7 +26,9 @@ func (ri *ReplicaInstance) getDatabaseConnection() (*sql.DB, error) {
 		"function": "database.replica.getDatabaseConnection",
 	})
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=1s", ri.cfg.Username, ri.cfg.Password, ri.cfg.Host, ri.cfg.Port, ri.cfg.Schema))
+	instance := ri.instances[rand.Intn(len(ri.instances))]
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=1s", instance.Username, instance.Password, instance.Host, instance.Port, instance.Schema))
 	if err != nil {
 		logger.Errorf("Error connecting to MySQL: %v", err)
 		return nil, err
@@ -33,7 +36,7 @@ func (ri *ReplicaInstance) getDatabaseConnection() (*sql.DB, error) {
 	db.SetMaxIdleConns(0)
 	db.SetMaxOpenConns(0)
 
-	logger.Tracef("Connected to %s:xxx@tcp(%s:%d)/%s", ri.cfg.Username, ri.cfg.Host, ri.cfg.Port, ri.cfg.Schema)
+	logger.Tracef("Connected to %s:xxx@tcp(%s:%d)/%s", instance.Username, instance.Host, instance.Port, instance.Schema)
 	return db, nil
 }
 
