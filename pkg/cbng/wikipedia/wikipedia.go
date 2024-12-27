@@ -505,15 +505,15 @@ func (w *WikipediaApi) GetWarningLevel(l *logrus.Entry, parentCtx context.Contex
 	ctx, span := metrics.OtelTracer.Start(parentCtx, "wikipedia.GetWarningLevel")
 	defer span.End()
 
-	page := w.GetPage(logger, ctx, fmt.Sprintf("User talk:%s", user))
-
-	matches := regexp.MustCompile(`<!-- Template:uw-[a-z]*(\d)(im)? -->.*(\d{2}:\d{2}, \d+ [a-zA-Z]+ \d{4} \(UTC\))`).FindAllStringSubmatch(page.Data, -1)
 	level := 0
-	for _, match := range matches {
-		if matchLevel, err := strconv.Atoi(match[1]); err == nil {
-			if t, err := time.Parse("15:04, 02 January 2006 (MST)", match[2]); err == nil {
-				if matchLevel > level && t.Second() <= (2*24*60*60) {
-					level = matchLevel
+	if page := w.GetPage(logger, ctx, fmt.Sprintf("User talk:%s", user)); page != nil {
+		matches := regexp.MustCompile(`<!-- Template:uw-[a-z]*(\d)(im)? -->.*(\d{2}:\d{2}, \d+ [a-zA-Z]+ \d{4} \(UTC\))`).FindAllStringSubmatch(page.Data, -1)
+		for _, match := range matches {
+			if matchLevel, err := strconv.Atoi(match[1]); err == nil {
+				if t, err := time.Parse("15:04, 02 January 2006 (MST)", match[2]); err == nil {
+					if matchLevel > level && t.Second() <= (2*24*60*60) {
+						level = matchLevel
+					}
 				}
 			}
 		}
