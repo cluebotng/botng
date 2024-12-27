@@ -50,7 +50,6 @@ func revertChange(l *logrus.Entry, parentCtx context.Context, api *wikipedia.Wik
 
 	revComment := "older version"
 	if revertRevision.Id != 0 {
-		metrics.RevertStatus.With(prometheus.Labels{"state": "revert", "status": "failed", "meta": "revision_is_old"}).Inc()
 		revComment = fmt.Sprintf("version by %s", revertRevision.User)
 	}
 
@@ -191,7 +190,7 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 		if noBotsDenyRegex.MatchString(change.Current.Text) {
 			logger.Infof("Not reverting due to bots deny")
 			change.RevertReason = "Exclusion compliance"
-			metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "exclusion_deny"}).Inc()
+			metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "skipped", "meta": "exclusion_deny"}).Inc()
 			return false
 		}
 
@@ -200,7 +199,7 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 			if !strings.Contains(noBotsAllows[0][1], name) {
 				logger.Infof("Not reverting due to no bots allow")
 				change.RevertReason = "Exclusion compliance"
-				metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "exclusion_allow"}).Inc()
+				metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "skipped", "meta": "exclusion_allow"}).Inc()
 				return false
 			}
 		}
@@ -209,7 +208,7 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 	if change.User.Username == change.Common.Creator {
 		logger.Infof("Not reverting due to page creator being the user")
 		change.RevertReason = "User is creator"
-		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "common_creator"}).Inc()
+		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "skipped", "meta": "common_creator"}).Inc()
 		return false
 	}
 
@@ -218,7 +217,7 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 		if userWarnRatio < 0.1 {
 			logger.Infof("Not reverting due to user edit count")
 			change.RevertReason = "User has edit count"
-			metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "high_edit_count"}).Inc()
+			metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "skipped", "meta": "high_edit_count"}).Inc()
 			return false
 		}
 		logger.Infof("Found user edit count, but high warns (%f)", userWarnRatio)
