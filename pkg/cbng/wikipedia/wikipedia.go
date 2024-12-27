@@ -83,19 +83,19 @@ func (w *WikipediaApi) attemptLogin(reqData url.Values) (bool, *string) {
 	logger.Tracef("Attempting login")
 	response, err := w.client.PostForm("https://en.wikipedia.org/w/api.php", reqData)
 	if err != nil {
-		logger.Infof("Failed to login: %v", err)
+		logger.Errorf("Failed to login: %v", err)
 		return false, nil
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != 200 || response.Body == nil {
-		logger.Infof("Error response received: %+v", response)
+		logger.Errorf("Error response received: %+v", response)
 		return false, nil
 	}
 
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
-		logger.Infof("Failed to read token login response: %v", err)
+		logger.Errorf("Failed to read token login response: %v", err)
 		return false, nil
 	}
 
@@ -122,7 +122,7 @@ func (w *WikipediaApi) login() error {
 		"lgpassword": []string{w.password},
 	})
 	if success {
-		logger.Infof("Logged into Wikipedia (no token)")
+		logger.Debug("Logged into Wikipedia (no token)")
 		return nil
 	}
 
@@ -135,7 +135,7 @@ func (w *WikipediaApi) login() error {
 			"lgtoken":    []string{*loginToken},
 		})
 		if success {
-			logger.Infof("Logged into Wikipedia (token)")
+			logger.Debug("Logged into Wikipedia (token)")
 			return nil
 		}
 	}
@@ -154,20 +154,20 @@ func (w *WikipediaApi) GetRevisionMetadata(l *logrus.Entry, revId int64) *Revisi
 	logger.Tracef("Starting request")
 	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&prop=revisions&revids=%d&rvprop=user|comment|size|timestamp&format=json", revId))
 	if err != nil {
-		logger.Infof("Failed to query revision meta (%d): %v", revId, err)
+		logger.Errorf("Failed to query revision meta (%d): %v", revId, err)
 		return nil
 	}
 	defer response.Body.Close()
 
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
-		logger.Infof("Failed to read revision meta (%d): %v", revId, err)
+		logger.Errorf("Failed to read revision meta (%d): %v", revId, err)
 		return nil
 	}
 
 	for _, pages := range data["query"].(map[string]interface{})["pages"].(map[string]interface{}) {
 		if pages.(map[string]interface{})["revisions"] == nil {
-			logger.Infof("Found no revisions for %v: %v", revId, err)
+			logger.Errorf("Found no revisions for %v: %v", revId, err)
 			return nil
 		}
 
@@ -175,7 +175,7 @@ func (w *WikipediaApi) GetRevisionMetadata(l *logrus.Entry, revId int64) *Revisi
 
 		timestamp, err := time.Parse("2006-01-02T15:04:05Z", targetRevision["timestamp"].(string))
 		if err != nil {
-			logger.Infof("Failed to parse timestamp (%s): %v", targetRevision["timestamp"], err)
+			logger.Errorf("Failed to parse timestamp (%s): %v", targetRevision["timestamp"], err)
 			return nil
 		}
 
@@ -206,7 +206,7 @@ func (w *WikipediaApi) GetRevisionHistory(l *logrus.Entry, ctx context.Context, 
 	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvstartid=%d&rvlimit=5&rvslots=*&rvprop=timestamp|user|content|ids&format=json", url.QueryEscape(page), revId))
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to query page revisions (%s, %d): %v", page, revId, err)
+		logger.Errorf("Failed to query page revisions (%s, %d): %v", page, revId, err)
 		return nil
 	}
 	defer response.Body.Close()
@@ -232,7 +232,7 @@ func (w *WikipediaApi) GetRevisionHistory(l *logrus.Entry, ctx context.Context, 
 			timestampCurrent := revision.(map[string]interface{})["timestamp"].(string)
 			if val, err := time.Parse("2006-01-02T15:04:05Z", timestampCurrent); err != nil {
 				span.SetStatus(codes.Error, err.Error())
-				logger.Infof("Failed to decode revision timestamp (%s): %v", timestampCurrent, err)
+				logger.Errorf("Failed to decode revision timestamp (%s): %v", timestampCurrent, err)
 			} else {
 				revisionData.Timestamp = val.Unix()
 			}
@@ -257,7 +257,7 @@ func (w *WikipediaApi) GetRevision(l *logrus.Entry, ctx context.Context, page st
 	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvstartid=%d&rvlimit=2&rvslots=*&rvprop=timestamp|user|content|ids&format=json", url.QueryEscape(page), revId))
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to query page revisions: %v", err)
+		logger.Errorf("Failed to query page revisions: %v", err)
 		return nil
 	}
 	defer response.Body.Close()
@@ -265,19 +265,19 @@ func (w *WikipediaApi) GetRevision(l *logrus.Entry, ctx context.Context, page st
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to read page revisions: %v", err)
+		logger.Errorf("Failed to read page revisions: %v", err)
 		return nil
 	}
 	logger.Tracef("Got response")
 
 	if data["query"] == nil {
-		logger.Infof("Found no query result: %v", data)
+		logger.Errorf("Found no query result: %v", data)
 		return nil
 	}
 
 	for _, value := range data["query"].(map[string]interface{})["pages"].(map[string]interface{}) {
 		if value.(map[string]interface{})["revisions"] == nil {
-			logger.Infof("Found no pages: %v", data)
+			logger.Errorf("Found no pages: %v", data)
 			return nil
 		}
 		revisions := value.(map[string]interface{})["revisions"].([]interface{})
@@ -344,7 +344,7 @@ func (w *WikipediaApi) GetPage(l *logrus.Entry, ctx context.Context, name string
 	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvlimit=1&rvslots=*&rvprop=timestamp|user|content|ids&format=json&meta=userinfo&rvdir=older", url.QueryEscape(name)))
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to query page revisions %s: %v", name, err)
+		logger.Errorf("Failed to query page revisions %s: %v", name, err)
 		return nil
 	}
 	defer response.Body.Close()
@@ -352,14 +352,14 @@ func (w *WikipediaApi) GetPage(l *logrus.Entry, ctx context.Context, name string
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to read page revisions %s: %v", name, err)
+		logger.Errorf("Failed to read page revisions %s: %v", name, err)
 		return nil
 	}
 	logger.Tracef("Got response")
 
 	for _, value := range data["query"].(map[string]interface{})["pages"].(map[string]interface{}) {
 		if value.(map[string]interface{})["revisions"] == nil {
-			logger.Infof("Found no revisions for %v: %v", name, err)
+			logger.Errorf("Found no revisions for %v: %v", name, err)
 			return nil
 		}
 		revisions := value.(map[string]interface{})["revisions"].([]interface{})
@@ -371,7 +371,7 @@ func (w *WikipediaApi) GetPage(l *logrus.Entry, ctx context.Context, name string
 		timestampCurrent := revisions[0].(map[string]interface{})["timestamp"].(string)
 		if val, err := time.Parse("2006-01-02T15:04:05Z", timestampCurrent); err != nil {
 			span.SetStatus(codes.Error, err.Error())
-			logger.Infof("Failed to decode revision timestamp (%s): %v", timestampCurrent, err)
+			logger.Errorf("Failed to decode revision timestamp (%s): %v", timestampCurrent, err)
 		} else {
 			revisionData.Timestamp = val.Unix()
 		}
@@ -389,7 +389,7 @@ func (w *WikipediaApi) getRollbackToken(l *logrus.Entry, ctx context.Context) *s
 	response, err := w.client.Get("https://en.wikipedia.org/w/api.php?action=query&meta=tokens&type=rollback&format=json")
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to request rollback token: %v", err)
+		logger.Errorf("Failed to request rollback token: %v", err)
 		return nil
 	}
 	defer response.Body.Close()
@@ -397,7 +397,7 @@ func (w *WikipediaApi) getRollbackToken(l *logrus.Entry, ctx context.Context) *s
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to read rollback token response: %v", err)
+		logger.Errorf("Failed to read rollback token response: %v", err)
 		return nil
 	}
 	logger.Tracef("Got response")
@@ -415,7 +415,7 @@ func (w *WikipediaApi) getCsrfToken(l *logrus.Entry, ctx context.Context) *strin
 	response, err := w.client.Get("https://en.wikipedia.org/w/api.php?action=query&meta=tokens&format=json")
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to request csrf token: %v", err)
+		logger.Errorf("Failed to request csrf token: %v", err)
 		return nil
 	}
 	defer response.Body.Close()
@@ -423,7 +423,7 @@ func (w *WikipediaApi) getCsrfToken(l *logrus.Entry, ctx context.Context) *strin
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		logger.Infof("Failed to read csrf token response: %v", err)
+		logger.Errorf("Failed to read csrf token response: %v", err)
 		return nil
 	}
 	logger.Tracef("Got response")
@@ -446,7 +446,7 @@ func (w *WikipediaApi) Rollback(l *logrus.Entry, parentCtx context.Context, titl
 
 	rollbackToken := w.getRollbackToken(logger, ctx)
 	if rollbackToken == nil {
-		logger.Infof("Failed to get token for rolling back %v (%v)", title, user)
+		logger.Errorf("Failed to get token for rolling back %v (%v)", title, user)
 		return false
 	}
 
@@ -464,7 +464,7 @@ func (w *WikipediaApi) Rollback(l *logrus.Entry, parentCtx context.Context, titl
 		})
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
-			logger.Infof("Failed to request rollback: %v", err)
+			logger.Errorf("Failed to request rollback: %v", err)
 			return false
 		}
 		defer response.Body.Close()
@@ -472,25 +472,25 @@ func (w *WikipediaApi) Rollback(l *logrus.Entry, parentCtx context.Context, titl
 		data := map[string]interface{}{}
 		if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
 			span.SetStatus(codes.Error, err.Error())
-			logger.Infof("Failed to read rollback response: %v", err)
+			logger.Errorf("Failed to read rollback response: %v", err)
 			return false
 		}
 		logger.Tracef("Got response")
 
 		if data["error"] != nil {
 			if data["error"].(map[string]interface{})["code"].(string) == "badtoken" {
-				logger.Infof("Got bad token, re-trying after login")
+				logger.Warnf("Got bad token, re-trying after login")
 				if err := w.login(); err != nil {
 					span.SetStatus(codes.Error, err.Error())
 					logger.Panicf("Failed to login to wikipedia: %v", err)
 				}
 				return w.Rollback(logger, ctx, title, user, comment)
 			}
-			logger.Infof("Error during rollback: %+v", data)
+			logger.Errorf("Error during rollback: %+v", data)
 			return false
 		}
 
-		logger.Infof("Completed Rollback: %+v", data)
+		logger.Debugf("Completed Rollback: %+v", data)
 	}
 	return true
 }
@@ -556,7 +556,7 @@ func (w *WikipediaApi) WritePage(l *logrus.Entry, parentCtx context.Context, tit
 
 	editToken := w.getCsrfToken(logger, ctx)
 	if editToken == nil {
-		logger.Infof("Failed to get csrf token for %v", title)
+		logger.Errorf("Failed to get csrf token for %v", title)
 		return false
 	}
 
@@ -575,7 +575,7 @@ func (w *WikipediaApi) WritePage(l *logrus.Entry, parentCtx context.Context, tit
 		})
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
-			logger.Infof("Failed to request edit: %v", err)
+			logger.Errorf("Failed to request edit: %v", err)
 			return false
 		}
 		defer response.Body.Close()
@@ -583,25 +583,25 @@ func (w *WikipediaApi) WritePage(l *logrus.Entry, parentCtx context.Context, tit
 		data := map[string]interface{}{}
 		if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
 			span.SetStatus(codes.Error, err.Error())
-			logger.Infof("Failed to read edit response: %v", err)
+			logger.Errorf("Failed to read edit response: %v", err)
 			return false
 		}
 		logger.Tracef("Got response")
 
 		if data["error"] != nil {
 			if data["error"].(map[string]interface{})["code"].(string) == "badtoken" {
-				logger.Infof("Got bad token, re-trying after login")
+				logger.Warnf("Got bad token, re-trying after login")
 				if err := w.login(); err != nil {
 					span.SetStatus(codes.Error, err.Error())
 					logger.Panicf("Failed to login to wikipedia: %v", err)
 				}
 				return w.WritePage(logger, ctx, title, content, comment)
 			}
-			logger.Infof("Error during edit: %+v", data)
+			logger.Errorf("Error during edit: %+v", data)
 			return false
 		}
 
-		logger.Infof("Completed edit: %+v", data)
+		logger.Debugf("Completed edit: %+v", data)
 	}
 	return true
 }
