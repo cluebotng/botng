@@ -175,6 +175,7 @@ func main() {
 		Filename:   logFile,
 		MaxBackups: 31,
 		MaxAge:     1,
+		MaxSize:    100000,
 		Compress:   true,
 	}))
 
