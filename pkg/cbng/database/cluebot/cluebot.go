@@ -146,22 +146,22 @@ func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, ctx context.Contex
 	if err != nil {
 		logger.Errorf("Error connecting to db: %v", err)
 		span.SetStatus(codes.Error, err.Error())
-		return 0, err
-	}
-	defer db.Close()
-
-	rows, err := db.Query("SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
-	if err != nil {
-		logger.Infof("Error running query: %v", err)
-		span.SetStatus(codes.Error, err.Error())
 	} else {
-		defer rows.Close()
-		if !rows.Next() {
-			logger.Infof("No data found for query")
+		defer db.Close()
+
+		rows, err := db.Query("SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
+		if err != nil {
+			logger.Infof("Error running query: %v", err)
+			span.SetStatus(codes.Error, err.Error())
 		} else {
-			if err := rows.Scan(&revertTime); err != nil {
-				logger.Errorf("Error reading rows for query: %v", err)
-				span.SetStatus(codes.Error, err.Error())
+			defer rows.Close()
+			if !rows.Next() {
+				logger.Infof("No data found for query")
+			} else {
+				if err := rows.Scan(&revertTime); err != nil {
+					logger.Errorf("Error reading rows for query: %v", err)
+					span.SetStatus(codes.Error, err.Error())
+				}
 			}
 		}
 	}

@@ -136,6 +136,7 @@ func main() {
 	var processors int
 	var sqlLoaders int
 	var httpLoaders int
+	var changeId int64
 
 	pflag.BoolVar(&debugLogging, "debug", false, "Should we log debug info")
 	pflag.BoolVar(&traceLogging, "trace", false, "Should we log trace info")
@@ -145,6 +146,7 @@ func main() {
 	pflag.IntVar(&processors, "processors", 20, "Number of processors to use")
 	pflag.IntVar(&sqlLoaders, "sql-loaders", 20, "Number of SQL loaders to use")
 	pflag.IntVar(&httpLoaders, "http-loaders", 20, "Number of HTTP loaders to use")
+	pflag.Int64Var(&changeId, "process-id", 0, "Process a single ID, rather than feed")
 	pflag.Parse()
 
 	if traceLogging {
@@ -215,17 +217,22 @@ func main() {
 	go RunMetricPoller(&wg, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserRegistrationLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r, db)
 	go RunDatabasePurger(&wg, db)
 
-	go feed.ConsumeHttpChangeEvents(&wg, configuration, toReplicationWatcher)
+	if changeId > 0 {
+		go feed.EmitSingleEdit(api, changeId, toReplicationWatcher)
+	} else {
+		go feed.ConsumeHttpChangeEvents(&wg, configuration, toReplicationWatcher)
+	}
+
 	go processor.ReplicationWatcher(&wg, configuration, db, ignoreReplicationDelay, toReplicationWatcher, toPageMetadataLoader)
 
 	for i := 0; i < sqlLoaders; i++ {
-		go loader.LoadPageMetadata(&wg, configuration, db, r, toPageMetadataLoader, toPageRecentEditCountLoader)
-		go loader.LoadPageRecentEditCount(&wg, configuration, db, r, toPageRecentEditCountLoader, toPageRecentRevertCountLoader)
-		go loader.LoadPageRecentRevertCount(&wg, configuration, db, r, toPageRecentRevertCountLoader, toUserEditCountLoader)
-		go loader.LoadUserEditCount(&wg, configuration, db, r, toUserEditCountLoader, toUserRegistrationLoader)
-		go loader.LoadUserRegistrationTime(&wg, configuration, db, r, toUserRegistrationLoader, toUserWarnsCountLoader)
-		go loader.LoadDistinctPagesCount(&wg, configuration, db, r, toUserWarnsCountLoader, toUserDistinctPagesCountLoader)
-		go loader.LoadUserWarnsCount(&wg, configuration, db, r, toUserDistinctPagesCountLoader, toRevisionLoader)
+		go loader.LoadPageMetadata(&wg, db, r, toPageMetadataLoader, toPageRecentEditCountLoader)
+		go loader.LoadPageRecentEditCount(&wg, db, r, toPageRecentEditCountLoader, toPageRecentRevertCountLoader)
+		go loader.LoadPageRecentRevertCount(&wg, db, r, toPageRecentRevertCountLoader, toUserEditCountLoader)
+		go loader.LoadUserEditCount(&wg, db, r, toUserEditCountLoader, toUserRegistrationLoader)
+		go loader.LoadUserRegistrationTime(&wg, db, r, toUserRegistrationLoader, toUserWarnsCountLoader)
+		go loader.LoadDistinctPagesCount(&wg, db, r, toUserWarnsCountLoader, toUserDistinctPagesCountLoader)
+		go loader.LoadUserWarnsCount(&wg, db, r, toUserDistinctPagesCountLoader, toRevisionLoader)
 	}
 
 	for i := 0; i < httpLoaders; i++ {

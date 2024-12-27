@@ -8,6 +8,7 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
+	"github.com/cluebotng/botng/pkg/cbng/wikipedia"
 	"github.com/prometheus/client_golang/prometheus"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
@@ -120,7 +121,16 @@ func handleLine(logger *logrus.Entry, line string, configuration *config.Configu
 		}
 
 		// Otherwise send for processing
-		logger.WithFields(logrus.Fields{"uuid": change.Uuid, "change": change}).Debug("Received new event")
+		logger.WithFields(logrus.Fields{
+			"uuid": change.Uuid,
+			"change": map[string]interface{}{
+				"user":      change.User.Username,
+				"namespace": change.Common.Namespace,
+				"title":     change.Common.Title,
+				"oldid":     change.Previous.Id,
+				"curid":     change.Current.Id,
+			},
+		}).Info("Received new event")
 		metrics.EditStatus.With(prometheus.Labels{"state": "received_new", "status": "success"}).Inc()
 
 		change.StartNewActiveSpan("pending.Replication")
@@ -173,4 +183,77 @@ func ConsumeHttpChangeEvents(wg *sync.WaitGroup, configuration *config.Configura
 		logger.Infof("Stream returned, trying to reconnect (attempt %v)", attempts)
 		time.Sleep(time.Duration(attempts) * time.Second)
 	}
+}
+
+func EmitSingleEdit(api *wikipedia.WikipediaApi, changeId int64, changeFeed chan<- *model.ProcessEvent) {
+	logger := logrus.WithFields(logrus.Fields{"function": "feed.EmitSingleEdit"})
+
+	revisionMeta := api.GetRevisionMetadata(logger, changeId)
+	if revisionMeta == nil {
+		logger.Fatalf("Could not get revision metadata")
+		return
+	}
+
+	revisionHistory := *api.GetRevisionHistory(logger, context.Background(), revisionMeta.Title, changeId)
+	if len(revisionHistory) < 2 {
+		logger.Fatalf("Could not get revision history")
+		return
+	}
+
+	changeUUID := uuid.NewV4().String()
+	receivedTime := time.Now().UTC()
+	changeTime := time.Unix(revisionMeta.Timestamp, 0)
+
+	_, span := metrics.OtelTracer.Start(context.Background(), "handleEdit")
+	span.SetAttributes(attribute.String("uuid", changeUUID))
+	span.SetAttributes(attribute.Int64("time_until_received", receivedTime.Unix()-changeTime.Unix()))
+	defer span.End()
+
+	change := model.ProcessEvent{
+		TraceContext: trace.ContextWithRemoteSpanContext(
+			context.Background(),
+			trace.NewSpanContext(trace.SpanContextConfig{
+				TraceID:    span.SpanContext().TraceID(),
+				SpanID:     span.SpanContext().SpanID(),
+				TraceFlags: trace.FlagsSampled,
+			}),
+		),
+		Logger:       logger.WithFields(logrus.Fields{"uuid": changeUUID}),
+		ActiveSpan:   nil,
+		Uuid:         changeUUID,
+		ReceivedTime: receivedTime,
+		ChangeTime:   changeTime,
+		Common: model.ProcessEventCommon{
+			Namespace:   helpers.NameSpaceIdToName(revisionMeta.NamespaceId),
+			NamespaceId: revisionMeta.NamespaceId,
+			Title:       revisionMeta.Title,
+		},
+		Comment: revisionMeta.Comment,
+		User: model.ProcessEventUser{
+			Username: revisionMeta.User,
+		},
+		Length: revisionMeta.Size,
+
+		Current: model.ProcessEventRevision{
+			Id: int64(changeId),
+		},
+		Previous: model.ProcessEventRevision{
+			Id: revisionHistory[1].Id,
+		},
+	}
+
+	// Otherwise send for processing
+	logger.WithFields(logrus.Fields{
+		"uuid": change.Uuid,
+		"change": map[string]interface{}{
+			"user":      change.User.Username,
+			"namespace": change.Common.Namespace,
+			"title":     change.Common.Title,
+			"oldid":     change.Previous.Id,
+			"curid":     change.Current.Id,
+		},
+	}).Info("Received new event")
+
+	change.StartNewActiveSpan("pending.Replication")
+	changeFeed <- &change
 }

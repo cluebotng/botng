@@ -30,6 +30,15 @@ type Revision struct {
 	User      string
 }
 
+type RevisionMeta struct {
+	NamespaceId int64
+	Title       string
+	User        string
+	Comment     string
+	Size        int64
+	Timestamp   int64
+}
+
 type WikipediaApi struct {
 	username string
 	password string
@@ -132,6 +141,54 @@ func (w *WikipediaApi) login() error {
 	}
 
 	return errors.New("Failed to login to Wikipedia")
+}
+
+func (w *WikipediaApi) GetRevisionMetadata(l *logrus.Entry, revId int64) *RevisionMeta {
+	logger := l.WithFields(logrus.Fields{
+		"function": "wikipedia.WikipediaApi.GetRevisionMetadata",
+		"args": map[string]interface{}{
+			"revId": revId,
+		},
+	})
+
+	logger.Tracef("Starting request")
+	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&prop=revisions&revids=%d&rvprop=user|comment|size|timestamp&format=json", revId))
+	if err != nil {
+		logger.Infof("Failed to query revision meta (%d): %v", revId, err)
+		return nil
+	}
+	defer response.Body.Close()
+
+	data := map[string]interface{}{}
+	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
+		logger.Infof("Failed to read revision meta (%d): %v", revId, err)
+		return nil
+	}
+
+	for _, pages := range data["query"].(map[string]interface{})["pages"].(map[string]interface{}) {
+		if pages.(map[string]interface{})["revisions"] == nil {
+			logger.Infof("Found no revisions for %v: %v", revId, err)
+			return nil
+		}
+
+		targetRevision := pages.(map[string]interface{})["revisions"].([]interface{})[0].(map[string]interface{})
+
+		timestamp, err := time.Parse("2006-01-02T15:04:05Z", targetRevision["timestamp"].(string))
+		if err != nil {
+			logger.Infof("Failed to parse timestamp (%s): %v", targetRevision["timestamp"], err)
+			return nil
+		}
+
+		return &RevisionMeta{
+			NamespaceId: int64(pages.(map[string]interface{})["ns"].(float64)),
+			Title:       pages.(map[string]interface{})["title"].(string),
+			User:        targetRevision["user"].(string),
+			Comment:     targetRevision["comment"].(string),
+			Size:        int64(targetRevision["size"].(float64)),
+			Timestamp:   timestamp.Unix(),
+		}
+	}
+	return nil
 }
 
 func (w *WikipediaApi) GetRevisionHistory(l *logrus.Entry, ctx context.Context, page string, revId int64) *RevisionHistory {

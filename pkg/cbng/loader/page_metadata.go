@@ -2,7 +2,6 @@ package loader
 
 import (
 	"fmt"
-	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
@@ -13,7 +12,7 @@ import (
 	"sync"
 )
 
-func LoadPageMetadata(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
+func LoadPageMetadata(wg *sync.WaitGroup, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
 	wg.Add(1)
 	defer wg.Done()
 	for {

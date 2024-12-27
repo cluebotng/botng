@@ -13,7 +13,6 @@ import (
 )
 
 func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, ignoreReplicationDelay bool, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
-	logger := logrus.WithField("function", "processor.ReplicationWatcher")
 	wg.Add(1)
 	defer wg.Done()
 
@@ -25,6 +24,7 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 		select {
 		// Every second update the stats & process the pending queue
 		case <-timer.C:
+			logger := logrus.WithField("function", "processor.ReplicationWatcher")
 			if mutex.TryLock() {
 				func() {
 					defer mutex.Unlock()
@@ -43,6 +43,7 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 					}
 
 					for _, change := range pending {
+						logger := change.Logger.WithField("function", "processor.ReplicationWatcher")
 						func() {
 							// If we're ignoring replication or are past the change in replication, kick off the process
 							if ignoreReplicationDelay || change.ChangeTime.Unix() >= replicationPoint {
@@ -75,6 +76,8 @@ func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration,
 			}
 
 		case change := <-inChangeFeed:
+			logger := change.Logger.WithField("function", "processor.ReplicationWatcher")
+
 			// Put the change feed into the pending map
 			pending[change.Uuid] = change
 

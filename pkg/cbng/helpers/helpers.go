@@ -8,6 +8,7 @@ import (
 )
 
 var namespacesByName map[string]int64
+var namespacesById map[int64]string
 
 func init() {
 	namespacesByName = map[string]int64{
@@ -38,6 +39,11 @@ func init() {
 		"gadget":            2300,
 		"gadget definition": 2302,
 	}
+
+	namespacesById = map[int64]string{}
+	for k, v := range namespacesByName {
+		namespacesById[v] = k
+	}
 }
 
 func PageTitleWithoutNamespace(title string) string {
@@ -60,6 +66,10 @@ func PageTitle(namespace, title string) string {
 
 func NameSpaceNameToId(ns string) int64 {
 	return namespacesByName[strings.ToLower(ns)]
+}
+
+func NameSpaceIdToName(nsid int64) string {
+	return namespacesById[nsid]
 }
 
 func FormatPlusOrMinus(value int64) string {

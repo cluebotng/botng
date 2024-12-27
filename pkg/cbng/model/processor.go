@@ -37,9 +37,9 @@ type ProcessEventUser struct {
 }
 
 type ProcessEvent struct {
-	TraceContext   context.Context
-	Logger         *logrus.Entry
-	ActiveSpan     *trace.Span
+	TraceContext   context.Context `json:"-"`
+	Logger         *logrus.Entry   `json:"-"`
+	ActiveSpan     *trace.Span     `json:"-"`
 	Uuid           string
 	ReceivedTime   time.Time
 	ChangeTime     time.Time
