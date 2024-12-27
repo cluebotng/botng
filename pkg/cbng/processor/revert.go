@@ -250,9 +250,10 @@ func shouldRevert(l *logrus.Entry, parentCtx context.Context, configuration *con
 		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "database_error"}).Inc()
 		return false
 	}
+
 	if lastRevertTime != 0 && lastRevertTime > time.Now().UTC().Unix()-config.RecentRevertThreshold {
 		change.RevertReason = "Reverted before"
-		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "failed", "meta": "recent_revert"}).Inc()
+		metrics.RevertStatus.With(prometheus.Labels{"state": "should_revert", "status": "skipped", "meta": "recent_revert"}).Inc()
 		return false
 	}
 
@@ -280,11 +281,6 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 	}
 	logger.Infof("Generated vandalism id %v", mysqlVandalismId)
 
-	// Log the revert time for later
-	if err := db.ClueBot.SaveRevertTime(logger, ctx, change.Common.Title, change.User.Username); err != nil {
-		logger.Warnf("Failed to save revert time: %v", err)
-	}
-
 	// Revert or not
 	if !shouldRevert(logger, ctx, configuration, db, change) {
 		metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "skipped"}).Inc()
@@ -293,6 +289,11 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 		return nil
 	}
 	logger.Infof("Should revert: %s", change.RevertReason)
+
+	// Log the revert time for later
+	if err := db.ClueBot.SaveRevertTime(logger, ctx, change.Common.Title, change.User.Username); err != nil {
+		logger.Warnf("Failed to save revert time: %v", err)
+	}
 
 	if revertChange(logger, ctx, api, change, configuration, mysqlVandalismId) {
 		metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "success"}).Inc()
