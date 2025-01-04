@@ -2,6 +2,7 @@ package loader
 
 import (
 	"fmt"
+	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
@@ -25,7 +26,7 @@ func LoadPageRecentRevertCount(wg *sync.WaitGroup, db *database.DatabaseConnecti
 			_, span := metrics.OtelTracer.Start(change.TraceContext, "LoadPageRecentRevertCount")
 			defer span.End()
 
-			pageRecentRevertCount, err := db.Replica.GetPageRecentRevertCount(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix())
+			pageRecentRevertCount, err := db.Replica.GetPageRecentRevertCount(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix()-config.RecentChangeWindow)
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_recent_reverts", "status": "failed"}).Inc()
 				logger.Error(err.Error())

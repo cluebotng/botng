@@ -2,6 +2,7 @@ package loader
 
 import (
 	"fmt"
+	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
@@ -26,7 +27,7 @@ func LoadPageRecentEditCount(wg *sync.WaitGroup, db *database.DatabaseConnection
 
 			logger := change.Logger.WithField("function", "loader.LoadPageRecentEditCount")
 
-			pageRecentEditCount, err := db.Replica.GetPageRecentEditCount(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix()-14*86400)
+			pageRecentEditCount, err := db.Replica.GetPageRecentEditCount(logger, change.Common.NamespaceId, helpers.PageTitleWithoutNamespace(change.Common.Title), change.ReceivedTime.Unix()-config.RecentChangeWindow)
 			if err != nil {
 				metrics.EditStatus.With(prometheus.Labels{"state": "lookup_page_recent_edits", "status": "failed"}).Inc()
 				logger.Error(err.Error())
