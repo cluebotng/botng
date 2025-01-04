@@ -141,7 +141,7 @@ func main() {
 	pflag.BoolVar(&debugMetrics, "debug-metrics", false, "Should we log metrics")
 	pflag.BoolVar(&useIrcRelay, "irc-relay", false, "Should we use enable the IRC relay")
 	pflag.BoolVar(&ignoreReplicationDelay, "no-replication-check", false, "Should we disable the replication monitoring")
-	pflag.IntVar(&processors, "processors", 20, "Number of processors to use")
+	pflag.IntVar(&processors, "processors", 5, "Number of processors to use")
 	pflag.IntVar(&sqlLoaders, "sql-loaders", 20, "Number of SQL loaders to use")
 	pflag.IntVar(&httpLoaders, "http-loaders", 20, "Number of HTTP loaders to use")
 	pflag.Int64Var(&changeId, "process-id", 0, "Process a single ID, rather than feed")
