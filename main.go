@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/feed"
@@ -19,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -70,22 +70,19 @@ func RunDatabasePurger(wg *sync.WaitGroup, db *database.DatabaseConnection) {
 }
 
 func setupTracing(configuration *config.Configuration, debugMetrics bool) {
-	if configuration.Honey.SampleRate > 0 && configuration.Honey.SampleRate < 1 {
-		for k, v := range map[string]string{
-			"OTEL_TRACES_SAMPLER":      "traceidratio",
-			"OTEL_TRACES_SAMPLER_ARG":  fmt.Sprintf("%.2f", configuration.Honey.SampleRate),
-			"OTEL_RESOURCE_ATTRIBUTES": fmt.Sprintf("SampleRate=%.2f", (1 / configuration.Honey.SampleRate)),
-		} {
-			logrus.Debugf("setting env var %s to %s", k, v)
-			if err := os.Setenv(k, v); err != nil {
-				logrus.Warnf("failed to set sampling env var (%s -> %v): %s", k, v, err)
-			}
-		}
+	traceResourceOptions := []resource.Option{
+		resource.WithAttributes(semconv.ServiceNameKey.String("ClueBot NG")),
+	}
+
+	traceSampler := trace.AlwaysSample()
+	if !debugMetrics && configuration.Honey.SampleRate > 0 && configuration.Honey.SampleRate < 1 {
+		traceSampler = trace.TraceIDRatioBased(configuration.Honey.SampleRate)
+		traceResourceOptions = append(traceResourceOptions, resource.WithAttributes(attribute.Float64("SampleRate", (1/configuration.Honey.SampleRate))))
 	}
 
 	traceResource, err := resource.New(
 		context.Background(),
-		resource.WithAttributes(semconv.ServiceNameKey.String("ClueBot NG")),
+		traceResourceOptions...,
 	)
 	if err != nil {
 		logrus.Fatalf("failed to init otlptrace provider: %s", err)
@@ -93,6 +90,7 @@ func setupTracing(configuration *config.Configuration, debugMetrics bool) {
 
 	traceProviderOptions := []trace.TracerProviderOption{
 		trace.WithResource(traceResource),
+		trace.WithSampler(traceSampler),
 	}
 	if configuration.Honey.Key != "" {
 		spanExporter, err := otlptrace.New(

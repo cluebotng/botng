@@ -67,7 +67,7 @@ type CoreConfiguration struct {
 
 type HoneyConfiguration struct {
 	Key        string
-	SampleRate float32
+	SampleRate float64
 }
 
 type Instances struct {
