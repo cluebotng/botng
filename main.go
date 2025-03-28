@@ -25,7 +25,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"net/http"
 	"os"
 	"sync"
@@ -169,13 +168,7 @@ func main() {
 	if value, ok := os.LookupEnv("BOTNG_LOG"); ok {
 		logFile = value
 	}
-	logrus.AddHook(helpers.NewLogFileHook(&lumberjack.Logger{
-		Filename:   logFile,
-		MaxBackups: 31,
-		MaxAge:     1,
-		MaxSize:    100000,
-		Compress:   true,
-	}))
+	logrus.AddHook(helpers.NewRotatingRotatingLogFileHook(logFile))
 
 	configuration := config.NewConfiguration()
 	setupTracing(configuration, debugMetrics)
