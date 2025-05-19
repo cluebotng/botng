@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+	"strings"
 )
 
 type RevisionData struct {
@@ -81,7 +82,14 @@ func (w *WikipediaApi) attemptLogin(reqData url.Values) (bool, *string) {
 	logger := logrus.WithField("function", "wikipedia.WikipediaApi.attemptLogin")
 
 	logger.Tracef("Attempting login")
-	response, err := w.client.PostForm("https://en.wikipedia.org/w/api.php", reqData)
+	req, err := http.NewRequest("POST", "https://en.wikipedia.org/w/api.php", strings.NewReader(reqData.Encode()))
+	if err != nil {
+	    logger.Errorf("Failed to build request: %v", err)
+		return false, nil
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "ClueBot/2.1")
+	response, err := w.client.Do(req)
 	if err != nil {
 		logger.Errorf("Failed to login: %v", err)
 		return false, nil
@@ -152,7 +160,13 @@ func (w *WikipediaApi) GetRevisionMetadata(l *logrus.Entry, revId int64) *Revisi
 	})
 
 	logger.Tracef("Starting request")
-	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&prop=revisions&revids=%d&rvprop=user|comment|size|timestamp&format=json", revId))
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&prop=revisions&revids=%d&rvprop=user|comment|size|timestamp&format=json", revId), nil)
+	if err != nil {
+	    logger.Errorf("Failed to build request: %v", err)
+		return nil
+	}
+	req.Header.Set("User-Agent", "ClueBot/2.1")
+	response, err := w.client.Do(req)
 	if err != nil {
 		logger.Errorf("Failed to query revision meta (%d): %v", revId, err)
 		return nil
@@ -203,7 +217,13 @@ func (w *WikipediaApi) GetRevisionHistory(l *logrus.Entry, ctx context.Context, 
 	defer span.End()
 
 	logger.Tracef("Starting request")
-	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvstartid=%d&rvlimit=5&rvslots=*&rvprop=timestamp|user|content|ids&format=json", url.QueryEscape(page), revId))
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvstartid=%d&rvlimit=5&rvslots=*&rvprop=timestamp|user|content|ids&format=json", url.QueryEscape(page), revId), nil)
+	if err != nil {
+	    logger.Errorf("Failed to build request: %v", err)
+		return nil
+	}
+	req.Header.Set("User-Agent", "ClueBot/2.1")
+	response, err := w.client.Do(req)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Failed to query page revisions (%s, %d): %v", page, revId, err)
@@ -254,7 +274,13 @@ func (w *WikipediaApi) GetRevision(l *logrus.Entry, ctx context.Context, page st
 	defer span.End()
 
 	logger.Tracef("Starting request")
-	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvstartid=%d&rvlimit=2&rvslots=*&rvprop=timestamp|user|content|ids&format=json", url.QueryEscape(page), revId))
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvstartid=%d&rvlimit=2&rvslots=*&rvprop=timestamp|user|content|ids&format=json", url.QueryEscape(page), revId), nil)
+	if err != nil {
+	    logger.Errorf("Failed to build request: %v", err)
+		return nil
+	}
+	req.Header.Set("User-Agent", "ClueBot/2.1")
+	response, err := w.client.Do(req)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Failed to query page revisions: %v", err)
@@ -341,7 +367,13 @@ func (w *WikipediaApi) GetPage(l *logrus.Entry, ctx context.Context, name string
 	defer span.End()
 
 	logger.Tracef("Starting request")
-	response, err := w.client.Get(fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvlimit=1&rvslots=*&rvprop=timestamp|user|content|ids&format=json&meta=userinfo&rvdir=older", url.QueryEscape(name)))
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&rawcontinue=1&prop=revisions&titles=%s&rvlimit=1&rvslots=*&rvprop=timestamp|user|content|ids&format=json&meta=userinfo&rvdir=older", url.QueryEscape(name)), nil)
+	if err != nil {
+	    logger.Errorf("Failed to build request: %v", err)
+		return nil
+	}
+	req.Header.Set("User-Agent", "ClueBot/2.1")
+	response, err := w.client.Do(req)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Failed to query page revisions %s: %v", name, err)
@@ -386,7 +418,13 @@ func (w *WikipediaApi) getRollbackToken(l *logrus.Entry, ctx context.Context) *s
 	defer span.End()
 
 	logger.Tracef("Starting request")
-	response, err := w.client.Get("https://en.wikipedia.org/w/api.php?action=query&meta=tokens&type=rollback&format=json")
+	req, err := http.NewRequest("GET", "https://en.wikipedia.org/w/api.php?action=query&meta=tokens&type=rollback&format=json", nil)
+	if err != nil {
+	    logger.Errorf("Failed to build request: %v", err)
+		return nil
+	}
+	req.Header.Set("User-Agent", "ClueBot/2.1")
+	response, err := w.client.Do(req)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Failed to request rollback token: %v", err)
@@ -412,7 +450,13 @@ func (w *WikipediaApi) getCsrfToken(l *logrus.Entry, ctx context.Context) *strin
 	defer span.End()
 
 	logger.Tracef("Starting request")
-	response, err := w.client.Get("https://en.wikipedia.org/w/api.php?action=query&meta=tokens&format=json")
+	req, err := http.NewRequest("GET", "https://en.wikipedia.org/w/api.php?action=query&meta=tokens&format=json", nil)
+	if err != nil {
+	    logger.Errorf("Failed to build request: %v", err)
+		return nil
+	}
+	req.Header.Set("User-Agent", "ClueBot/2.1")
+	response, err := w.client.Do(req)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		logger.Errorf("Failed to request csrf token: %v", err)
@@ -454,14 +498,21 @@ func (w *WikipediaApi) Rollback(l *logrus.Entry, parentCtx context.Context, titl
 		logger.Infof("Mock rollback due to read only mode")
 	} else {
 		logger.Tracef("Starting request")
-		response, err := w.client.PostForm("https://en.wikipedia.org/w/api.php", url.Values{
+        req, err := http.NewRequest("POST", "https://en.wikipedia.org/w/api.php", strings.NewReader(url.Values{
 			"action":  []string{"rollback"},
 			"format":  []string{"json"},
 			"title":   []string{title},
 			"user":    []string{user},
 			"summary": []string{comment},
 			"token":   []string{*rollbackToken},
-		})
+		}.Encode()))
+        if err != nil {
+            logger.Errorf("Failed to build request: %v", err)
+            return false
+        }
+        req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+        req.Header.Set("User-Agent", "ClueBot/2.1")
+        response, err := w.client.Do(req)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			logger.Errorf("Failed to request rollback: %v", err)
@@ -564,7 +615,7 @@ func (w *WikipediaApi) WritePage(l *logrus.Entry, parentCtx context.Context, tit
 		logger.Infof("Mock page write due to read only mode")
 	} else {
 		logger.Tracef("Starting request")
-		response, err := w.client.PostForm("https://en.wikipedia.org/w/api.php", url.Values{
+        req, err := http.NewRequest("POST", "https://en.wikipedia.org/w/api.php", strings.NewReader(url.Values{
 			"action":   []string{"edit"},
 			"format":   []string{"json"},
 			"title":    []string{title},
@@ -572,7 +623,14 @@ func (w *WikipediaApi) WritePage(l *logrus.Entry, parentCtx context.Context, tit
 			"summary":  []string{comment},
 			"token":    []string{*editToken},
 			"notminor": []string{"1"},
-		})
+		}.Encode()))
+        if err != nil {
+            logger.Errorf("Failed to build request: %v", err)
+            return false
+        }
+        req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+        req.Header.Set("User-Agent", "ClueBot/2.1")
+        response, err := w.client.Do(req)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			logger.Errorf("Failed to request edit: %v", err)

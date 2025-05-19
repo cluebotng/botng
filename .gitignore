@@ -1,5 +1,5 @@
 .idea
 *.iml
-botng.log*
+botng-*.log
 vendor/
 config.yaml
