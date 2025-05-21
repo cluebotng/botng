@@ -208,7 +208,7 @@ func (f *IrcServer) writer(wg *sync.WaitGroup) {
 func (f *IrcServer) Reconnector(wg *sync.WaitGroup) {
 	wg.Add(1)
 	defer wg.Done()
-	for _ = range f.ReConnectSignal {
+	for range f.ReConnectSignal {
 		f.Connect()
 	}
 }

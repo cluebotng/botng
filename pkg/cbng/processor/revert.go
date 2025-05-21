@@ -298,7 +298,9 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 		metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "success"}).Inc()
 		logger.Infof("Reverted successfully")
 		doWarn(logger, ctx, api, r, change, configuration, mysqlVandalismId)
-		db.ClueBot.MarkVandalismRevertedSuccessfully(logger, ctx, mysqlVandalismId)
+		if err := db.ClueBot.MarkVandalismRevertedSuccessfully(logger, ctx, mysqlVandalismId); err != nil {
+			logger.Warnf("Failed to mark vandalism as reverted in database: %v", err)
+		}
 
 		r.SendRevert(fmt.Sprintf("%s (Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ChangeTime.Unix()))
 		r.SendSpam(fmt.Sprintf("%s # %f # %s # Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
@@ -312,7 +314,9 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 		} else {
 			metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "beaten"}).Inc()
 			change.RevertReason = fmt.Sprintf("Beaten by %s", revision.User)
-			db.ClueBot.MarkVandalismRevertBeaten(logger, ctx, mysqlVandalismId, change.Common.Title, change.GetDiffUrl(), revision.User)
+			if err := db.ClueBot.MarkVandalismRevertBeaten(logger, ctx, mysqlVandalismId, change.Common.Title, change.GetDiffUrl(), revision.User); err != nil {
+				logger.Warnf("Failed to mark revert as beaten in database: %v", err)
+			}
 
 			r.SendRevert(fmt.Sprintf("%s (Not Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ChangeTime.Unix()))
 			r.SendSpam(fmt.Sprintf("%s # %f # %s # Not Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
