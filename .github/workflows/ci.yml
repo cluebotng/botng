@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -14,7 +14,7 @@ jobs:
           go-version: '^1.23'
       - run: go build
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     services:
       mysql:
         image: mysql:8.0
@@ -47,7 +47,7 @@ jobs:
         env:
           BOT_CFG: .github/config.yaml
   vet:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -55,7 +55,7 @@ jobs:
           go-version: '^1.23'
       - run: go vet
   golangci:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
