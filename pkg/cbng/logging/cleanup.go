@@ -56,9 +56,7 @@ func PruneOldLogFiles(wg *sync.WaitGroup, configuration *config.Configuration) {
 	// Then regularly
 	timer := time.NewTicker(time.Hour)
 	for {
-		select {
-		case <-timer.C:
-			executeLogFilePrune(configuration)
-		}
+		<-timer.C
+		executeLogFilePrune(configuration)
 	}
 }
