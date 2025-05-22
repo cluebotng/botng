@@ -13,7 +13,7 @@ import (
 )
 
 func ReplicationWatcher(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, ignoreReplicationDelay bool, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
-	wg.Add(1)
+
 	defer wg.Done()
 
 	pending := map[string]*model.ProcessEvent{}

@@ -31,7 +31,6 @@ import (
 )
 
 func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserRegistrationLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor chan *model.ProcessEvent, r *relay.Relays, db *database.DatabaseConnection) {
-	wg.Add(1)
 	defer wg.Done()
 
 	timer := time.NewTicker(time.Second)
@@ -54,7 +53,6 @@ func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditC
 }
 
 func RunDatabasePurger(wg *sync.WaitGroup, db *database.DatabaseConnection) {
-	wg.Add(1)
 	defer wg.Done()
 
 	timer := time.NewTicker(time.Hour)
@@ -202,33 +200,55 @@ func main() {
 	toScoringProcessor := make(chan *model.ProcessEvent, 10000)
 	toRevertProcessor := make(chan *model.ProcessEvent, 10000)
 
+	wg.Add(1)
 	go RunMetricPoller(&wg, toPageMetadataLoader, toPageRecentEditCountLoader, toPageRecentRevertCountLoader, toUserEditCountLoader, toUserRegistrationLoader, toUserWarnsCountLoader, toUserDistinctPagesCountLoader, toRevisionLoader, toScoringProcessor, toRevertProcessor, r, db)
+
+	wg.Add(1)
 	go RunDatabasePurger(&wg, db)
 
 	if changeId > 0 {
 		go feed.EmitSingleEdit(api, changeId, toReplicationWatcher)
 	} else {
+		wg.Add(1)
 		go feed.ConsumeHttpChangeEvents(&wg, configuration, toReplicationWatcher)
 	}
 
+	wg.Add(1)
 	go processor.ReplicationWatcher(&wg, configuration, db, ignoreReplicationDelay, toReplicationWatcher, toPageMetadataLoader)
 
 	for i := 0; i < sqlLoaders; i++ {
+		wg.Add(1)
 		go loader.LoadPageMetadata(&wg, db, r, toPageMetadataLoader, toPageRecentEditCountLoader)
+
+		wg.Add(1)
 		go loader.LoadPageRecentEditCount(&wg, db, r, toPageRecentEditCountLoader, toPageRecentRevertCountLoader)
+
+		wg.Add(1)
 		go loader.LoadPageRecentRevertCount(&wg, db, r, toPageRecentRevertCountLoader, toUserEditCountLoader)
+
+		wg.Add(1)
 		go loader.LoadUserEditCount(&wg, db, r, toUserEditCountLoader, toUserRegistrationLoader)
+
+		wg.Add(1)
 		go loader.LoadUserRegistrationTime(&wg, db, r, toUserRegistrationLoader, toUserWarnsCountLoader)
+
+		wg.Add(1)
 		go loader.LoadDistinctPagesCount(&wg, db, r, toUserWarnsCountLoader, toUserDistinctPagesCountLoader)
+
+		wg.Add(1)
 		go loader.LoadUserWarnsCount(&wg, db, r, toUserDistinctPagesCountLoader, toRevisionLoader)
 	}
 
 	for i := 0; i < httpLoaders; i++ {
+		wg.Add(1)
 		go loader.LoadPageRevision(&wg, api, r, toRevisionLoader, toScoringProcessor)
 	}
 
 	for i := 0; i < processors; i++ {
+		wg.Add(1)
 		go processor.ProcessScoringChangeEvents(&wg, configuration, r, toScoringProcessor, toRevertProcessor)
+
+		wg.Add(1)
 		go processor.ProcessRevertChangeEvents(&wg, configuration, db, r, api, toRevertProcessor)
 	}
 

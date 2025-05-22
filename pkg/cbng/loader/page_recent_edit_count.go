@@ -14,7 +14,7 @@ import (
 )
 
 func LoadPageRecentEditCount(wg *sync.WaitGroup, db *database.DatabaseConnection, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
-	wg.Add(1)
+
 	defer wg.Done()
 	for {
 		change := <-inChangeFeed

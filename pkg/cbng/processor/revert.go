@@ -329,7 +329,7 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 }
 
 func ProcessRevertChangeEvents(wg *sync.WaitGroup, configuration *config.Configuration, db *database.DatabaseConnection, r *relay.Relays, api *wikipedia.WikipediaApi, inChangeFeed chan *model.ProcessEvent) {
-	wg.Add(1)
+
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.ProcessorsRevertInUse.Inc()

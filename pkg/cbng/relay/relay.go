@@ -128,8 +128,10 @@ func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, 
 				limiter:         rate.NewLimiter(2, 4),
 				channel:         channel,
 			}
+			wg.Add(1)
 			go f.reader(wg)
 			f.connect()
+			wg.Add(1)
 			go f.reconnector(wg)
 			servers[relayType] = &f
 		}
@@ -165,15 +167,13 @@ func (r *Relays) SendSpam(message string) {
 }
 
 func (f *IrcServer) reader(wg *sync.WaitGroup) {
+	defer wg.Done()
 	logger := logrus.WithFields(logrus.Fields{
 		"function": "relay.IrcServer.reader",
 		"args": map[string]interface{}{
 			"nick": f.nick,
 		},
 	})
-
-	wg.Add(1)
-	defer wg.Done()
 
 	nickCount := 0
 	currentNick := strings.ReplaceAll(f.nick, " ", "-")
@@ -218,6 +218,7 @@ func (f *IrcServer) reader(wg *sync.WaitGroup) {
 }
 
 func (f *IrcServer) writer(wg *sync.WaitGroup) {
+	defer wg.Done()
 	logger := logrus.WithFields(logrus.Fields{
 		"function": "relay.IrcServer.writer",
 		"args": map[string]interface{}{
@@ -225,8 +226,6 @@ func (f *IrcServer) writer(wg *sync.WaitGroup) {
 		},
 	})
 
-	wg.Add(1)
-	defer wg.Done()
 	logger.Tracef("Started IRC writer")
 	for {
 		// We will spawn a new writer on every connection
@@ -251,7 +250,7 @@ func (f *IrcServer) writer(wg *sync.WaitGroup) {
 }
 
 func (f *IrcServer) reconnector(wg *sync.WaitGroup) {
-	wg.Add(1)
+
 	defer wg.Done()
 	for {
 		<-f.reConnectSignal

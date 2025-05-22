@@ -121,7 +121,6 @@ func (f *IrcServer) Reader(wg *sync.WaitGroup) {
 		},
 	})
 
-	wg.Add(1)
 	defer wg.Done()
 
 	nickCount := 0
@@ -182,7 +181,6 @@ func (f *IrcServer) writer(wg *sync.WaitGroup) {
 		},
 	})
 
-	wg.Add(1)
 	defer wg.Done()
 	logger.Info("Started IRC writer")
 	for {
@@ -206,7 +204,7 @@ func (f *IrcServer) writer(wg *sync.WaitGroup) {
 }
 
 func (f *IrcServer) Reconnector(wg *sync.WaitGroup) {
-	wg.Add(1)
+
 	defer wg.Done()
 	for range f.ReConnectSignal {
 		f.Connect()

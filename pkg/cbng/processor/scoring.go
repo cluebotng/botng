@@ -30,7 +30,7 @@ func isWhitelisted(l *logrus.Entry, configuration *config.Configuration, user st
 }
 
 func ProcessScoringChangeEvents(wg *sync.WaitGroup, configuration *config.Configuration, r *relay.Relays, inChangeFeed chan *model.ProcessEvent, outChangeFeed chan *model.ProcessEvent) {
-	wg.Add(1)
+
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.ProcessorsScoringInUse.Inc()

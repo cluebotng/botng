@@ -170,7 +170,6 @@ func streamFeed(logger *logrus.Entry, configuration *config.Configuration, chang
 
 func ConsumeHttpChangeEvents(wg *sync.WaitGroup, configuration *config.Configuration, changeFeed chan<- *model.ProcessEvent) {
 	logger := logrus.WithFields(logrus.Fields{"function": "feed.ConsumeHttpChangeEvents"})
-	wg.Add(1)
 	defer wg.Done()
 
 	attempts := 0

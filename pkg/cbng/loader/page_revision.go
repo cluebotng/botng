@@ -12,7 +12,7 @@ import (
 )
 
 func LoadPageRevision(wg *sync.WaitGroup, api *wikipedia.WikipediaApi, r *relay.Relays, inChangeFeed, outChangeFeed chan *model.ProcessEvent) {
-	wg.Add(1)
+
 	defer wg.Done()
 	for change := range inChangeFeed {
 		metrics.LoaderPageRevisionInUse.Inc()

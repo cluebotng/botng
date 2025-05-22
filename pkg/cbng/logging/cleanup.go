@@ -37,7 +37,7 @@ func executeLogFilePrune(configuration *config.Configuration) {
 }
 
 func PruneOldLogFiles(wg *sync.WaitGroup, configuration *config.Configuration) {
-	wg.Add(1)
+
 	defer wg.Done()
 
 	if configuration.Logging.Keep == 0 {
