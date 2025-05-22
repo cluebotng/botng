@@ -10,6 +10,32 @@ import (
 	"time"
 )
 
+func executeLogFilePrune(configuration *config.Configuration) {
+	logFileNamesToRetain := map[string]bool{}
+	for i := 0; i < configuration.Logging.Keep; i++ {
+		logFileName := formatLogFileName(configuration.Logging.File, time.Now().AddDate(0, 0, -i).Format("20060102"))
+		logFileNamesToRetain[logFileName] = true
+	}
+	logrus.Tracef("Calculated log files to keep: %v", logFileNamesToRetain)
+
+	if matches, err := filepath.Glob(strings.Replace(configuration.Logging.File, "%s", "*", 1)); err != nil {
+		logrus.Errorf("Failed to check for log file entries: %v", err)
+	} else {
+		for _, logFileName := range matches {
+			if logFileNamesToRetain[logFileName] {
+				logrus.Tracef("Skipping retained log file: %s", logFileName)
+				continue
+			}
+
+			if err := os.Remove(logFileName); err != nil {
+				logrus.Warnf("Failed to remove log file %s: %v", logFileName, err)
+			} else {
+				logrus.Tracef("Removed log file %s", logFileName)
+			}
+		}
+	}
+}
+
 func PruneOldLogFiles(wg *sync.WaitGroup, configuration *config.Configuration) {
 	wg.Add(1)
 	defer wg.Done()
@@ -24,33 +50,15 @@ func PruneOldLogFiles(wg *sync.WaitGroup, configuration *config.Configuration) {
 		return
 	}
 
+	// On startup
+	executeLogFilePrune(configuration)
+
+	// Then regularly
 	timer := time.NewTicker(time.Hour)
 	for {
 		select {
 		case <-timer.C:
-			logFileNamesToRetain := map[string]bool{}
-			for i := 0; i < configuration.Logging.Keep; i++ {
-				logFileName := formatLogFileName(configuration.Logging.File, time.Now().AddDate(0, 0, -i).Format("20060102"))
-				logFileNamesToRetain[logFileName] = true
-			}
-			logrus.Tracef("Calculated log files to keep: %v", logFileNamesToRetain)
-
-			if matches, err := filepath.Glob(strings.Replace(configuration.Logging.File, "%s", "*", 1)); err != nil {
-				logrus.Errorf("Failed to check for log file entries: %v", err)
-			} else {
-				for _, logFileName := range matches {
-					if logFileNamesToRetain[logFileName] {
-						logrus.Tracef("Skipping retained log file: %s", logFileName)
-						continue
-					}
-
-					if err := os.Remove(logFileName); err != nil {
-						logrus.Warnf("Failed to remove log file %s: %v", logFileName, err)
-					} else {
-						logrus.Tracef("Removed log file %s", logFileName)
-					}
-				}
-			}
+			executeLogFilePrune(configuration)
 		}
 	}
 }
