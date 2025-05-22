@@ -56,7 +56,11 @@ func (h *HuggleConfigurationInstance) reload() {
 		logger.Errorf("Failed to build request: %v", err)
 		return
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			logrus.Warnf("Failed to close response body: %v", err)
+		}
+	}()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {

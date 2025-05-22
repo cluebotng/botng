@@ -48,7 +48,11 @@ func (ri *ReplicaInstance) GetPageCreatedTimeAndUser(l *logrus.Entry, namespaceI
 		logger.Errorf("Error connecting to db: %v", err)
 		return "", 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var timestamp int64
 	var user string
@@ -62,10 +66,14 @@ func (ri *ReplicaInstance) GetPageCreatedTimeAndUser(l *logrus.Entry, namespaceI
 	if err != nil {
 		return user, timestamp, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logrus.Warnf("Failed to close rows: %v", err)
+		}
+	}()
 
 	if !rows.Next() {
-		return user, timestamp, errors.New("No rows found")
+		return user, timestamp, errors.New("no rows found")
 	}
 
 	if err := rows.Scan(&timestamp, &user); err != nil {
@@ -91,7 +99,11 @@ func (ri *ReplicaInstance) GetPageRecentEditCount(l *logrus.Entry, namespaceId i
 		logger.Errorf("Error connecting to db: %v", err)
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var recentEditCount int64
 	rows, err := db.Query("SET STATEMENT max_statement_time=10 FOR "+
@@ -102,7 +114,11 @@ func (ri *ReplicaInstance) GetPageRecentEditCount(l *logrus.Entry, namespaceId i
 	if err != nil {
 		return recentEditCount, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logrus.Warnf("Failed to close rows: %v", err)
+		}
+	}()
 
 	// No recent edits
 	if !rows.Next() {
@@ -132,7 +148,11 @@ func (ri *ReplicaInstance) GetPageRecentRevertCount(l *logrus.Entry, namespaceId
 		logger.Errorf("Error connecting to db: %v", err)
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var recentRevertCount int64
 	rows, err := db.Query("SET STATEMENT max_statement_time=10 FOR "+
@@ -145,7 +165,11 @@ func (ri *ReplicaInstance) GetPageRecentRevertCount(l *logrus.Entry, namespaceId
 	if err != nil {
 		return recentRevertCount, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logrus.Warnf("Failed to close rows: %v", err)
+		}
+	}()
 
 	if !rows.Next() {
 		// The page has never been reverted
@@ -174,7 +198,11 @@ func (ri *ReplicaInstance) GetAnonymousUserEditCount(l *logrus.Entry, user strin
 		logger.Errorf("Error connecting to db: %v", err)
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var editCount int64
 	logger.Debugf("Querying user_editcount for user")
@@ -184,7 +212,11 @@ func (ri *ReplicaInstance) GetAnonymousUserEditCount(l *logrus.Entry, user strin
 	if err != nil {
 		return editCount, err
 	}
-	defer userCountRows.Close()
+	defer func() {
+		if err := userCountRows.Close(); err != nil {
+			logrus.Warnf("Failed to close rows: %v", err)
+		}
+	}()
 
 	if !userCountRows.Next() {
 		logger.Debug("Found no edits")
@@ -210,7 +242,11 @@ func (ri *ReplicaInstance) GetRegisteredUserEditCount(l *logrus.Entry, user stri
 		logger.Errorf("Error connecting to db: %v", err)
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var editCount int64
 	logger.Debugf("Querying revision_userindex for anonymous user")
@@ -221,7 +257,11 @@ func (ri *ReplicaInstance) GetRegisteredUserEditCount(l *logrus.Entry, user stri
 	if err != nil {
 		return editCount, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logrus.Warnf("Failed to close rows: %v", err)
+		}
+	}()
 
 	if !rows.Next() {
 		logger.Debug("Found no edits")
@@ -247,7 +287,11 @@ func (ri *ReplicaInstance) GetUserRegistrationTime(l *logrus.Entry, user string)
 		logger.Errorf("Error connecting to db: %v", err)
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var registrationTime int64
 	// Anon users have no registration time so are a noop
@@ -258,7 +302,11 @@ func (ri *ReplicaInstance) GetUserRegistrationTime(l *logrus.Entry, user string)
 		if err != nil {
 			return registrationTime, err
 		}
-		defer userRegRows.Close()
+		defer func() {
+			if err := userRegRows.Close(); err != nil {
+				logrus.Warnf("Failed to close rows: %v", err)
+			}
+		}()
 
 		if userRegRows.Next() {
 			if err := userRegRows.Scan(&registrationTime); err != nil {
@@ -273,7 +321,11 @@ func (ri *ReplicaInstance) GetUserRegistrationTime(l *logrus.Entry, user string)
 			if err != nil {
 				return registrationTime, err
 			}
-			defer userRevRows.Close()
+			defer func() {
+				if err := userRevRows.Close(); err != nil {
+					logrus.Warnf("Failed to close rows: %v", err)
+				}
+			}()
 
 			if !userRevRows.Next() {
 				return registrationTime, errors.New("no edits found for user")
@@ -301,7 +353,11 @@ func (ri *ReplicaInstance) GetUserWarnCount(l *logrus.Entry, user string) (int64
 		logger.Errorf("Error connecting to db: %v", err)
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var warningCount int64
 	rows, err := db.Query("SET STATEMENT max_statement_time=10 FOR "+
@@ -314,7 +370,11 @@ func (ri *ReplicaInstance) GetUserWarnCount(l *logrus.Entry, user string) (int64
 	if err != nil {
 		return warningCount, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logrus.Warnf("Failed to close rows: %v", err)
+		}
+	}()
 
 	if !rows.Next() {
 		// User has never been warned
@@ -342,7 +402,11 @@ func (ri *ReplicaInstance) GetUserDistinctPagesCount(l *logrus.Entry, user strin
 		logger.Errorf("Error connecting to db: %v", err)
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var distinctPageCount int64
 	rows, err := db.Query("SET STATEMENT max_statement_time=10 FOR "+
@@ -351,7 +415,11 @@ func (ri *ReplicaInstance) GetUserDistinctPagesCount(l *logrus.Entry, user strin
 	if err != nil {
 		return distinctPageCount, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logrus.Warnf("Failed to close rows: %v", err)
+		}
+	}()
 
 	if !rows.Next() {
 		return 0, nil
@@ -373,7 +441,11 @@ func (ri *ReplicaInstance) GetLatestChangeTimestamp(l *logrus.Entry) (int64, err
 		logger.Errorf("Error connecting to db: %v", err)
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	var replicationDelay []uint8
 	rows, err := db.Query("SET STATEMENT max_statement_time=10 FOR " +
@@ -382,7 +454,11 @@ func (ri *ReplicaInstance) GetLatestChangeTimestamp(l *logrus.Entry) (int64, err
 		logger.Errorf("Failed to query replication delay: %+v", err)
 		return 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logrus.Warnf("Failed to close rows: %v", err)
+		}
+	}()
 
 	if !rows.Next() {
 		return 0, errors.New("no results for replication delay query")

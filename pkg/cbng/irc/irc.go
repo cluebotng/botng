@@ -76,7 +76,9 @@ func (f *IrcServer) close() {
 
 	logger.Info("Closing connection to IRC server")
 	if f.connection != nil {
-		f.connection.Close()
+		if err := f.connection.Close(); err != nil {
+			logger.Errorf("Failed to close IRC connection: %v", err)
+		}
 	}
 	f.connection = nil
 }

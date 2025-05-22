@@ -94,7 +94,12 @@ func (w *WikipediaApi) attemptLogin(reqData url.Values) (bool, *string) {
 		logger.Errorf("Failed to login: %v", err)
 		return false, nil
 	}
-	defer response.Body.Close()
+
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			logrus.Warnf("Failed to close response body: %v", err)
+		}
+	}()
 
 	if response.StatusCode != 200 || response.Body == nil {
 		logger.Errorf("Error response received: %+v", response)
@@ -148,7 +153,7 @@ func (w *WikipediaApi) login() error {
 		}
 	}
 
-	return errors.New("Failed to login to Wikipedia")
+	return errors.New("failed to login to Wikipedia")
 }
 
 func (w *WikipediaApi) GetRevisionMetadata(l *logrus.Entry, revId int64) *RevisionMeta {
@@ -171,7 +176,11 @@ func (w *WikipediaApi) GetRevisionMetadata(l *logrus.Entry, revId int64) *Revisi
 		logger.Errorf("Failed to query revision meta (%d): %v", revId, err)
 		return nil
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			logrus.Warnf("Failed to close response body: %v", err)
+		}
+	}()
 
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
@@ -229,7 +238,11 @@ func (w *WikipediaApi) GetRevisionHistory(l *logrus.Entry, ctx context.Context, 
 		logger.Errorf("Failed to query page revisions (%s, %d): %v", page, revId, err)
 		return nil
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			logrus.Warnf("Failed to close response body: %v", err)
+		}
+	}()
 
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
@@ -286,7 +299,11 @@ func (w *WikipediaApi) GetRevision(l *logrus.Entry, ctx context.Context, page st
 		logger.Errorf("Failed to query page revisions: %v", err)
 		return nil
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			logrus.Warnf("Failed to close response body: %v", err)
+		}
+	}()
 
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
@@ -379,7 +396,11 @@ func (w *WikipediaApi) GetPage(l *logrus.Entry, ctx context.Context, name string
 		logger.Errorf("Failed to query page revisions %s: %v", name, err)
 		return nil
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			logrus.Warnf("Failed to close response body: %v", err)
+		}
+	}()
 
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
@@ -430,7 +451,11 @@ func (w *WikipediaApi) getRollbackToken(l *logrus.Entry, ctx context.Context) *s
 		logger.Errorf("Failed to request rollback token: %v", err)
 		return nil
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			logrus.Warnf("Failed to close response body: %v", err)
+		}
+	}()
 
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
@@ -462,7 +487,11 @@ func (w *WikipediaApi) getCsrfToken(l *logrus.Entry, ctx context.Context) *strin
 		logger.Errorf("Failed to request csrf token: %v", err)
 		return nil
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			logrus.Warnf("Failed to close response body: %v", err)
+		}
+	}()
 
 	data := map[string]interface{}{}
 	if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
@@ -518,7 +547,11 @@ func (w *WikipediaApi) Rollback(l *logrus.Entry, parentCtx context.Context, titl
 			logger.Errorf("Failed to request rollback: %v", err)
 			return false
 		}
-		defer response.Body.Close()
+		defer func() {
+			if err := response.Body.Close(); err != nil {
+				logrus.Warnf("Failed to close response body: %v", err)
+			}
+		}()
 
 		data := map[string]interface{}{}
 		if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
@@ -636,7 +669,11 @@ func (w *WikipediaApi) WritePage(l *logrus.Entry, parentCtx context.Context, tit
 			logger.Errorf("Failed to request edit: %v", err)
 			return false
 		}
-		defer response.Body.Close()
+		defer func() {
+			if err := response.Body.Close(); err != nil {
+				logrus.Warnf("Failed to close response body: %v", err)
+			}
+		}()
 
 		data := map[string]interface{}{}
 		if err := json.NewDecoder(response.Body).Decode(&data); err != nil {

@@ -154,7 +154,11 @@ func streamFeed(logger *logrus.Entry, configuration *config.Configuration, chang
 	}
 
 	reader := bufio.NewReader(res.Body)
-	defer res.Body.Close()
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			logger.Errorf("Could not close response body: %v", err)
+		}
+	}()
 
 	for {
 		line, err := reader.ReadString('\n')

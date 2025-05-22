@@ -102,7 +102,11 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 		logger.Errorf("Could not connect (%v): %v", coreUrl, err)
 		return false, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			logger.Errorf("Could not close core connection: %v", err)
+		}
+	}()
 
 	if _, err := conn.Write(xmlData); err != nil {
 		span.SetStatus(codes.Error, err.Error())

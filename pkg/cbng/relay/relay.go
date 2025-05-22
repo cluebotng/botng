@@ -66,7 +66,9 @@ func (f *IrcServer) close() {
 
 	logger.Info("Closing connection to IRC server")
 	if f.connection != nil {
-		f.connection.Close()
+		if err := f.connection.Close(); err != nil {
+			logger.Errorf("Error closing IRC connection: %v", err)
+		}
 	}
 	f.connection = nil
 }
@@ -108,14 +110,16 @@ func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, 
 	if enableIrc {
 		for _, relayType := range []string{"debug", "revert", "spam"} {
 			var channel string
-			if relayType == "debug" {
+			switch relayType {
+			case "debug":
 				channel = channels.Debug
-			} else if relayType == "revert" {
+			case "revert":
 				channel = channels.Revert
-			} else if relayType == "spam" {
+			case "spam":
 				channel = channels.Spam
-			} else {
+			default:
 				logrus.Panicf("Unknown relay type: %+v", relayType)
+
 			}
 
 			f := IrcServer{

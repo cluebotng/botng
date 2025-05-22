@@ -48,7 +48,11 @@ func (ci *CluebotInstance) GenerateVandalismId(logger *logrus.Entry, ctx context
 		span.SetStatus(codes.Error, err.Error())
 		return 0, err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	res, err := db.Exec("INSERT INTO `vandalism` (`id`,`user`,`article`,`heuristic`,`reason`,`diff`,`old_id`,`new_id`,`reverted`) VALUES (NULL, ?, ?, '', ?, ?, ?, ?, 0)", user, title, reason, diffUrl, previousId, currentId)
 	if err != nil {
@@ -84,7 +88,11 @@ func (ci *CluebotInstance) MarkVandalismRevertedSuccessfully(l *logrus.Entry, ct
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	if _, err := db.Exec("UPDATE `vandalism` SET `reverted` = 1 WHERE `id` = ?", vandalismId); err != nil {
 		logger.Errorf("Error running query: %v", err)
@@ -113,7 +121,11 @@ func (ci *CluebotInstance) MarkVandalismRevertBeaten(l *logrus.Entry, ctx contex
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	if _, err := db.Exec("UPDATE `vandalism` SET `reverted` = 0 WHERE `id` = ?", vandalismId); err != nil {
 		logger.Errorf("Error running vandalism query: %v", err)
@@ -147,14 +159,22 @@ func (ci *CluebotInstance) GetLastRevertTime(l *logrus.Entry, ctx context.Contex
 		logger.Errorf("Error connecting to db: %v", err)
 		span.SetStatus(codes.Error, err.Error())
 	} else {
-		defer db.Close()
+		defer func() {
+			if err := db.Close(); err != nil {
+				logrus.Warnf("Failed to close database connection: %v", err)
+			}
+		}()
 
 		rows, err := db.Query("SELECT `time` FROM `last_revert` WHERE title=? AND user=?", title, user)
 		if err != nil {
 			logger.Infof("Error running query: %v", err)
 			span.SetStatus(codes.Error, err.Error())
 		} else {
-			defer rows.Close()
+			defer func() {
+				if err := rows.Close(); err != nil {
+					logrus.Warnf("Failed to close rows: %v", err)
+				}
+			}()
 			if !rows.Next() {
 				logger.Infof("No data found for query")
 			} else {
@@ -187,7 +207,11 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	rows, err := db.Query("INSERT INTO `last_revert` (`title`, `user`, `time`) "+
 		"VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `time`=`time`", title, user, revertTime)
@@ -196,7 +220,11 @@ func (ci *CluebotInstance) SaveRevertTime(l *logrus.Entry, ctx context.Context, 
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	} else {
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				logrus.Warnf("Failed to close rows: %v", err)
+			}
+		}()
 		if rows.Next() {
 			if err := rows.Scan(&revertTime); err != nil {
 				logger.Errorf("Error reading rows for query: %v", err)
@@ -222,7 +250,11 @@ func (ci *CluebotInstance) PurgeOldRevertTimes(ctx context.Context) {
 		span.SetStatus(codes.Error, err.Error())
 		return
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.Warnf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	_, err = db.Exec("DELETE FROM `last_revert` WHERE `time` < ?", time.Now().UTC().Unix()-(config.RecentRevertThreshold+10))
 	if err != nil {

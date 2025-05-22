@@ -90,7 +90,9 @@ func (hook *LogFileHook) closeOldFileHandlers() {
 		for name, file := range hook.fileHandles {
 			if name != currentFileName {
 				hook.mutex.Lock()
-				file.Close()
+				if err := file.Close(); err != nil {
+					logrus.Errorf("Failed to close current log file: %v", err)
+				}
 				delete(hook.fileHandles, name)
 				hook.mutex.Unlock()
 			}
