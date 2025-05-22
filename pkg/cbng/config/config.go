@@ -71,6 +71,11 @@ type HoneyConfiguration struct {
 	SampleRate float64
 }
 
+type LoggingConfiguration struct {
+	File string
+	Keep int
+}
+
 type Instances struct {
 	AngryOptInConfiguration *AngryOptInConfigurationInstance
 	HuggleConfiguration     *HuggleConfigurationInstance
@@ -91,11 +96,15 @@ type Configuration struct {
 	Irc       IrcConfiguration
 	Core      CoreConfiguration
 	Honey     HoneyConfiguration
+	Logging   LoggingConfiguration
 }
 
 func NewConfiguration() *Configuration {
 	logger := logrus.WithField("function", "config.NewConfiguration")
-	configuration := Configuration{}
+	configuration := Configuration{
+		Runtime: struct{ Release string }{Release: ReleaseTag},
+		Logging: LoggingConfiguration{File: "botng-%s.log", Keep: 14},
+	}
 
 	var configPath string
 	if val, ok := os.LookupEnv("BOTNG_CFG"); ok {
@@ -111,7 +120,6 @@ func NewConfiguration() *Configuration {
 		logger.Fatalf("Error reading config file, %s", err)
 	}
 
-	configuration.Runtime.Release = ReleaseTag
 	err := viper.Unmarshal(&configuration)
 	if err != nil {
 		logger.Fatalf("unable to decode into struct, %v", err)

@@ -6,8 +6,8 @@ import (
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/database"
 	"github.com/cluebotng/botng/pkg/cbng/feed"
-	"github.com/cluebotng/botng/pkg/cbng/helpers"
 	"github.com/cluebotng/botng/pkg/cbng/loader"
+	"github.com/cluebotng/botng/pkg/cbng/logging"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/cluebotng/botng/pkg/cbng/model"
 	"github.com/cluebotng/botng/pkg/cbng/processor"
@@ -26,7 +26,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 )
@@ -164,14 +163,11 @@ func main() {
 		},
 	})
 
-	logFile := "botng.log"
-	if value, ok := os.LookupEnv("BOTNG_LOG"); ok {
-		logFile = value
-	}
-	logrus.AddHook(helpers.NewRotatingRotatingLogFileHook(logFile))
-
 	configuration := config.NewConfiguration()
+	logrus.AddHook(logging.NewLogFileHook(configuration.Logging.File))
+
 	setupTracing(configuration, debugMetrics)
+	go logging.PruneOldLogFiles(&wg, configuration)
 
 	wg.Add(1)
 	go func() {

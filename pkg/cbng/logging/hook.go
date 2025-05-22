@@ -1,4 +1,4 @@
-package helpers
+package logging
 
 import (
 	"fmt"
@@ -9,23 +9,30 @@ import (
 	"time"
 )
 
-type RotatingLogFileHook struct {
+func formatLogFileName(baseName string, relativeTime string) string {
+	if strings.Contains(baseName, "%s") {
+		return fmt.Sprintf(baseName, relativeTime)
+	}
+	return baseName
+}
+
+type LogFileHook struct {
 	logFile     string
 	fileHandles map[string]*os.File
 	mutex       sync.Mutex
 }
 
-func NewRotatingRotatingLogFileHook(logFile string) *RotatingLogFileHook {
-	rotatingLogFileHook := &RotatingLogFileHook{
+func NewLogFileHook(logFile string) *LogFileHook {
+	LogFileHook := &LogFileHook{
 		logFile:     logFile,
 		fileHandles: make(map[string]*os.File),
 		mutex:       sync.Mutex{},
 	}
-	go rotatingLogFileHook.closeOldFileHandlers()
-	return rotatingLogFileHook
+	go LogFileHook.closeOldFileHandlers()
+	return LogFileHook
 }
 
-func (hook *RotatingLogFileHook) Fire(entry *logrus.Entry) error {
+func (hook *LogFileHook) Fire(entry *logrus.Entry) error {
 	if line, err := entry.Bytes(); err != nil {
 		return err
 	} else {
@@ -36,16 +43,11 @@ func (hook *RotatingLogFileHook) Fire(entry *logrus.Entry) error {
 	return nil
 }
 
-func (hook *RotatingLogFileHook) getCurrentFileName() string {
-	currentFileName := hook.logFile
-	if strings.HasSuffix(hook.logFile, ".log") {
-		prefix, _ := strings.CutSuffix(hook.logFile, ".log")
-		currentFileName = fmt.Sprintf("%s-%s.log", prefix, time.Now().Format("20060102"))
-	}
-	return currentFileName
+func (hook *LogFileHook) getCurrentFileName() string {
+	return formatLogFileName(hook.logFile, time.Now().Format("20060102"))
 }
 
-func (hook *RotatingLogFileHook) getFileHandler() (*os.File, error) {
+func (hook *LogFileHook) getFileHandler() (*os.File, error) {
 	currentFileName := hook.getCurrentFileName()
 	if hook.fileHandles[currentFileName] == nil {
 		hook.mutex.Lock()
@@ -59,7 +61,7 @@ func (hook *RotatingLogFileHook) getFileHandler() (*os.File, error) {
 	return hook.fileHandles[currentFileName], nil
 }
 
-func (hook *RotatingLogFileHook) write(line []byte) error {
+func (hook *LogFileHook) write(line []byte) error {
 	if fileHandler, err := hook.getFileHandler(); err != nil {
 		return err
 	} else {
@@ -70,7 +72,7 @@ func (hook *RotatingLogFileHook) write(line []byte) error {
 	return nil
 }
 
-func (hook *RotatingLogFileHook) Levels() []logrus.Level {
+func (hook *LogFileHook) Levels() []logrus.Level {
 	return []logrus.Level{
 		logrus.DebugLevel,
 		logrus.InfoLevel,
@@ -81,7 +83,7 @@ func (hook *RotatingLogFileHook) Levels() []logrus.Level {
 	}
 }
 
-func (hook *RotatingLogFileHook) closeOldFileHandlers() {
+func (hook *LogFileHook) closeOldFileHandlers() {
 	timer := time.NewTicker(time.Hour)
 	for range timer.C {
 		currentFileName := hook.getCurrentFileName()
