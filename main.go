@@ -71,7 +71,7 @@ func setupTracing(configuration *config.Configuration, debugMetrics bool) {
 	}
 
 	traceSampler := trace.AlwaysSample()
-	if !debugMetrics && configuration.Honey.SampleRate > 0 && configuration.Honey.SampleRate < 1 {
+	if configuration.Honey.SampleRate > 0 && configuration.Honey.SampleRate < 1 {
 		traceSampler = trace.TraceIDRatioBased(configuration.Honey.SampleRate)
 		traceResourceOptions = append(traceResourceOptions, resource.WithAttributes(attribute.Float64("SampleRate", (1/configuration.Honey.SampleRate))))
 	}
