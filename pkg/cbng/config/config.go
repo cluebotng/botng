@@ -119,7 +119,7 @@ func NewConfiguration() *Configuration {
 		        "DASHBotAV",
 		    },
 		    Run: envVarWithDefault("CBNG_CFG_RUN", "true") == "true",
-		    Angry: envVarWithDefault("CBNG_CFG_ANGRY", "true") == "true",
+		    Angry: envVarWithDefault("CBNG_CFG_ANGRY", "false") == "true",
 		    ReadOnly: envVarWithDefault("CBNG_CFG_READ_ONLY", "true") == "true",
 		},
 		Wikipedia: WikipediaConfiguration{
