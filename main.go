@@ -162,7 +162,9 @@ func main() {
 	})
 
 	configuration := config.NewConfiguration()
-	logrus.AddHook(logging.NewLogFileHook(configuration.Logging.File))
+	if configuration.Logging.File != "" {
+		logrus.AddHook(logging.NewLogFileHook(configuration.Logging.File))
+	}
 
 	setupTracing(configuration, debugMetrics)
 	go logging.PruneOldLogFiles(&wg, configuration)
