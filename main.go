@@ -173,6 +173,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 		http.Handle("/metrics", promhttp.Handler())
+		http.HandleFunc("/health", func(http.ResponseWriter, *http.Request) {})
 		if err := http.ListenAndServe(":8118", nil); err != nil {
 			logrus.Fatalf("failed to serve metrics: %s", err)
 		}
