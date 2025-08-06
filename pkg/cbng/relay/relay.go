@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
+	"encoding/base64"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,6 +24,7 @@ type Relays struct {
 type IrcServer struct {
 	host            string
 	nick            string
+	username        string
 	password        string
 	port            int
 	channel         string
@@ -51,8 +53,6 @@ func (f *IrcServer) connect() {
 		}
 		f.connection = conn
 		f.scanner = bufio.NewScanner(f.connection)
-		f.send(fmt.Sprintf("USER %s \"1\" \"1\" :ClueBot Wikipedia Bot 3.0.", strings.ReplaceAll(f.nick, " ", "_")))
-		f.send(fmt.Sprintf("NICK %s", strings.ReplaceAll(f.nick, " ", "_")))
 	}
 }
 
@@ -74,7 +74,8 @@ func (f *IrcServer) close() {
 }
 
 func (f *IrcServer) send(message string) bool {
-	isPrivate := strings.Contains(strings.ToUpper(message), "PRIVMSG NICKSERV")
+    upperCaseMessage := strings.ToUpper(message)
+	isPrivate := strings.HasPrefix(upperCaseMessage, "PRIVMSG NICKSERV ") || strings.HasPrefix(upperCaseMessage, "AUTHENTICATE ")
 	loggerMessage := message
 	if isPrivate {
 		loggerMessage = "**secret**"
@@ -126,6 +127,7 @@ func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, 
 				host:            host,
 				port:            port,
 				nick:            fmt.Sprintf("%v-%v", nick, relayType),
+				username:        nick,
 				password:        password,
 				sendChan:        make(chan string, 10000),
 				reConnectSignal: make(chan bool, 1),
@@ -181,6 +183,7 @@ func (f *IrcServer) reader(wg *sync.WaitGroup) {
 
 	nickCount := 0
 	currentNick := strings.ReplaceAll(f.nick, " ", "-")
+	hasDoneTheSaslDance := false
 	for {
 		if f.connection == nil {
 			f.reConnectSignal <- true
@@ -199,13 +202,33 @@ func (f *IrcServer) reader(wg *sync.WaitGroup) {
 		llogger.Trace("Parsing line")
 
 		switch {
+		// Authenticate early
+		case strings.HasSuffix(line, "*** No Ident response"):
+		    if f.password != "" {
+		        // Prefer to do SASL
+			    f.send("CAP REQ :sasl")
+            }
+            f.send(fmt.Sprintf("USER %s \"1\" \"1\" :ClueBot Wikipedia Bot 3.0.", strings.ReplaceAll(f.nick, " ", "_")))
+            f.send(fmt.Sprintf("NICK %s", strings.ReplaceAll(f.nick, " ", "_")))
+
+        case strings.HasSuffix(line, "CAP * ACK :sasl"):
+            f.send("AUTHENTICATE PLAIN")
+
+        case strings.HasSuffix(line, "AUTHENTICATE +"):
+            authPayload := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s\x00%s\x00%s", f.username, f.username, f.password)))
+            f.send(fmt.Sprintf("AUTHENTICATE %s", authPayload))
+
+        case strings.HasSuffix(line, "SASL authentication successful"):
+            f.send("CAP END")
+            hasDoneTheSaslDance = true
+
 		case lparts[0] == "ERROR":
 			llogger.Errorf("Received error: %v", line)
 			f.close()
 		case lparts[0] == "PING":
 			f.send(fmt.Sprintf("PONG %s", strings.TrimLeft(lparts[1], ":")))
 		case len(lparts) >= 2 && (lparts[1] == "376" || lparts[1] == "422"):
-			if f.password != "" {
+			if f.password != "" && !hasDoneTheSaslDance {
 				f.send(fmt.Sprintf("PRIVMSG NickServ :IDENTIFY %s %s", currentNick, f.password))
 			}
 			f.send(fmt.Sprintf("JOIN #%s", f.channel))
