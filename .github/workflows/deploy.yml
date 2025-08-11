@@ -1,5 +1,5 @@
 name: Deploy
-on: { push: { tags: [ 'v*' ], branches: [ main ] } }
+on: { push: { tags: [ 'v*' ], branches: [ feature/use-deployments ] } }
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -9,9 +9,14 @@ jobs:
           repository: cluebotng/utilities
           ref: main
 
-      - uses: cluebotng/ci-execute-fabric@main
+      - uses: cluebotng/ci-update-component-ref@main
         with:
-          task: deploy-bot
-          user: cluebotng-staging
-          release: ${{ github.ref }}
-          ssh_key: ${{ secrets.CI_SSH_KEY }}
+          tool: cluebotng-staging
+          component: bot
+          ref: ${{ github.ref }}
+          gh_app_key: ${{ secrets.CI_COMPONENT_CONFIGS_APP_KEY }}
+
+      - uses: cluebotng/ci-toolforge-deploy@main
+        with:
+          tool: cluebotng-staging
+          token: ${{ secrets.CI_DEPLOY_TOKEN }}
