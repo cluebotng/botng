@@ -1,6 +1,6 @@
 module github.com/cluebotng/botng
 
-go 1.21
+go 1.21.5
 
 toolchain go1.24.3
 
