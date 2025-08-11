@@ -2,7 +2,7 @@ module github.com/cluebotng/botng
 
 go 1.21.5
 
-toolchain go1.24.3
+toolchain go1.21.5
 
 require (
 	github.com/go-sql-driver/mysql v1.9.3
