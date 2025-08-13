@@ -16,7 +16,3 @@ jobs:
           ref: ${{ github.ref }}
           gh_app_key: ${{ secrets.CI_COMPONENT_CONFIGS_APP_KEY }}
 
-      - uses: cluebotng/ci-toolforge-deploy@main
-        with:
-          tool: cluebotng-staging
-          token: ${{ secrets.CI_DEPLOY_TOKEN }}
