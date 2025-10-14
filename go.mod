@@ -1,6 +1,6 @@
 module github.com/cluebotng/botng
 
-go 1.23.0
+go 1.24.0
 
 toolchain go1.24.3
 
@@ -17,7 +17,7 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.37.0
 	go.opentelemetry.io/otel/sdk v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
-	golang.org/x/time v0.12.0
+	golang.org/x/time v0.14.0
 )
 
 require (
