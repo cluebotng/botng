@@ -117,7 +117,6 @@ func doWarn(l *logrus.Entry, parentCtx context.Context, api *wikipedia.Wikipedia
 			metrics.EditStatus.With(prometheus.Labels{"state": "avi_report", "status": "failed"}).Inc()
 			return false
 		}
-		r.SendSpam(fmt.Sprintf("Reporting to AIV %s (%d)", change.User.Username, warningLevel))
 		metrics.EditStatus.With(prometheus.Labels{"state": "avi_report", "status": "success"}).Inc()
 		return true
 	} else {
@@ -135,7 +134,6 @@ func doWarn(l *logrus.Entry, parentCtx context.Context, api *wikipedia.Wikipedia
 			return false
 		}
 		metrics.EditStatus.With(prometheus.Labels{"state": "user_warning", "status": "success"}).Inc()
-		r.SendSpam(fmt.Sprintf("Warning %s (%d)", change.User.Username, warningLevel))
 		return true
 	}
 }
@@ -275,7 +273,6 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 		change.Previous.Id,
 		change.Current.Id)
 	if err != nil {
-		r.SendSpam(fmt.Sprintf("%s # %f # %s # Not reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
 		return fmt.Errorf("failed to generate vandalism id: %v", err)
 	}
 	logger.Infof("Generated vandalism id %v", mysqlVandalismId)
@@ -284,7 +281,6 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 	if !shouldRevert(logger, ctx, configuration, db, change) {
 		metrics.EditStatus.With(prometheus.Labels{"state": "revert", "status": "skipped"}).Inc()
 		logger.Infof("Should not revert: %s", change.RevertReason)
-		r.SendSpam(fmt.Sprintf("%s # %f # %s # Not reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
 		return nil
 	}
 	logger.Infof("Should revert: %s", change.RevertReason)
@@ -303,7 +299,6 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 		}
 
 		r.SendRevert(fmt.Sprintf("%s (Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ChangeTime.Unix()))
-		r.SendSpam(fmt.Sprintf("%s # %f # %s # Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
 		return nil
 	}
 	logger.Infof("Failed to revert")
@@ -319,7 +314,6 @@ func processSingleRevertChange(logger *logrus.Entry, parentCtx context.Context, 
 			}
 
 			r.SendRevert(fmt.Sprintf("%s (Not Reverted) (%s) (%d s)", change.FormatIrcRevert(), change.RevertReason, time.Now().Unix()-change.ChangeTime.Unix()))
-			r.SendSpam(fmt.Sprintf("%s # %f # %s # Not Reverted", change.FormatIrcChange(), change.VandalismScore, change.RevertReason))
 		}
 		return nil
 	}

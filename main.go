@@ -48,7 +48,6 @@ func RunMetricPoller(wg *sync.WaitGroup, toPageMetadataLoader, toPageRecentEditC
 
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "debug"}).Set(float64(r.GetPendingDebugMessages()))
 		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "revert"}).Set(float64(r.GetPendingRevertMessages()))
-		metrics.IrcNotificationsPending.With(prometheus.Labels{"channel": "spam"}).Set(float64(r.GetPendingSpamMessages()))
 	}
 }
 

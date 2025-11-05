@@ -52,7 +52,6 @@ func ProcessScoringChangeEvents(wg *sync.WaitGroup, configuration *config.Config
 
 			if !isVandalism {
 				logger.Infof("Is not vandalism (scored at %f)", change.VandalismScore)
-				r.SendSpam(fmt.Sprintf("%s # %f # Below threshold # Not reverted", change.FormatIrcChange(), change.VandalismScore))
 				metrics.EditStatus.With(prometheus.Labels{"state": "score_edit", "status": "classified_as_not_vandalism"}).Inc()
 				return
 			}
@@ -60,7 +59,6 @@ func ProcessScoringChangeEvents(wg *sync.WaitGroup, configuration *config.Config
 
 			if isWhitelisted(logger, configuration, change.User.Username) {
 				logger.Infof("User is whitelisted, not reverting")
-				r.SendSpam(fmt.Sprintf("%s # %f # Whitelisted # Not reverted", change.FormatIrcChange(), change.VandalismScore))
 				metrics.EditStatus.With(prometheus.Labels{"state": "score_edit", "status": "skipped_due_to_whitelist"}).Inc()
 				return
 			}

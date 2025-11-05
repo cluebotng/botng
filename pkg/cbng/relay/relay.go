@@ -3,8 +3,8 @@ package relay
 import (
 	"bufio"
 	"crypto/tls"
-	"fmt"
 	"encoding/base64"
+	"fmt"
 	"github.com/cluebotng/botng/pkg/cbng/config"
 	"github.com/cluebotng/botng/pkg/cbng/metrics"
 	"github.com/prometheus/client_golang/prometheus"
@@ -74,7 +74,7 @@ func (f *IrcServer) close() {
 }
 
 func (f *IrcServer) send(message string) bool {
-    upperCaseMessage := strings.ToUpper(message)
+	upperCaseMessage := strings.ToUpper(message)
 	isPrivate := strings.HasPrefix(upperCaseMessage, "PRIVMSG NICKSERV ") || strings.HasPrefix(upperCaseMessage, "AUTHENTICATE ")
 	loggerMessage := message
 	if isPrivate {
@@ -109,15 +109,13 @@ func (f *IrcServer) send(message string) bool {
 func NewRelays(wg *sync.WaitGroup, enableIrc bool, host string, port int, nick, password string, channels config.IrcRelayChannelConfiguration) *Relays {
 	servers := map[string]*IrcServer{}
 	if enableIrc {
-		for _, relayType := range []string{"debug", "revert", "spam"} {
+		for _, relayType := range []string{"debug", "revert"} {
 			var channel string
 			switch relayType {
 			case "debug":
 				channel = channels.Debug
 			case "revert":
 				channel = channels.Revert
-			case "spam":
-				channel = channels.Spam
 			default:
 				logrus.Panicf("Unknown relay type: %+v", relayType)
 
@@ -165,13 +163,6 @@ func (r *Relays) SendRevert(message string) {
 	}
 }
 
-func (r *Relays) SendSpam(message string) {
-	metrics.IrcNotificationsSent.With(prometheus.Labels{"channel": "spam"}).Inc()
-	if r.spam != nil {
-		r.spam.sendChan <- message
-	}
-}
-
 func (f *IrcServer) reader(wg *sync.WaitGroup) {
 	defer wg.Done()
 	logger := logrus.WithFields(logrus.Fields{
@@ -204,23 +195,23 @@ func (f *IrcServer) reader(wg *sync.WaitGroup) {
 		switch {
 		// Authenticate early
 		case strings.HasSuffix(line, "*** No Ident response"):
-		    if f.password != "" {
-		        // Prefer to do SASL
-			    f.send("CAP REQ :sasl")
-            }
-            f.send(fmt.Sprintf("USER %s \"1\" \"1\" :ClueBot Wikipedia Bot 3.0.", strings.ReplaceAll(f.nick, " ", "_")))
-            f.send(fmt.Sprintf("NICK %s", strings.ReplaceAll(f.nick, " ", "_")))
+			if f.password != "" {
+				// Prefer to do SASL
+				f.send("CAP REQ :sasl")
+			}
+			f.send(fmt.Sprintf("USER %s \"1\" \"1\" :ClueBot Wikipedia Bot 3.0.", strings.ReplaceAll(f.nick, " ", "_")))
+			f.send(fmt.Sprintf("NICK %s", strings.ReplaceAll(f.nick, " ", "_")))
 
-        case strings.HasSuffix(line, "CAP * ACK :sasl"):
-            f.send("AUTHENTICATE PLAIN")
+		case strings.HasSuffix(line, "CAP * ACK :sasl"):
+			f.send("AUTHENTICATE PLAIN")
 
-        case strings.HasSuffix(line, "AUTHENTICATE +"):
-            authPayload := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s\x00%s\x00%s", f.username, f.username, f.password)))
-            f.send(fmt.Sprintf("AUTHENTICATE %s", authPayload))
+		case strings.HasSuffix(line, "AUTHENTICATE +"):
+			authPayload := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s\x00%s\x00%s", f.username, f.username, f.password)))
+			f.send(fmt.Sprintf("AUTHENTICATE %s", authPayload))
 
-        case strings.HasSuffix(line, "SASL authentication successful"):
-            f.send("CAP END")
-            hasDoneTheSaslDance = true
+		case strings.HasSuffix(line, "SASL authentication successful"):
+			f.send("CAP END")
+			hasDoneTheSaslDance = true
 
 		case lparts[0] == "ERROR":
 			llogger.Errorf("Received error: %v", line)
@@ -283,13 +274,6 @@ func (f *IrcServer) reconnector(wg *sync.WaitGroup) {
 		<-f.reConnectSignal
 		f.connect()
 	}
-}
-
-func (r *Relays) GetPendingSpamMessages() int {
-	if r.spam == nil {
-		return 0
-	}
-	return len(r.spam.sendChan)
 }
 
 func (r *Relays) GetPendingDebugMessages() int {
