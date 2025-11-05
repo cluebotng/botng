@@ -100,11 +100,11 @@ type Configuration struct {
 }
 
 func envVarWithDefault(key, fallback string) string {
-    value := os.Getenv(key)
-    if len(value) == 0 {
-        return fallback
-    }
-    return value
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	return value
 }
 
 func NewConfiguration() *Configuration {
@@ -113,56 +113,55 @@ func NewConfiguration() *Configuration {
 	configuration := Configuration{
 		Runtime: struct{ Release string }{Release: ReleaseTag},
 		Bot: BotConfiguration{
-		    Owner: "NaomiAmethyst",
-		    Friends: []string{
-		        "ClueBot",
-		        "DASHBotAV",
-		    },
-		    Run: envVarWithDefault("CBNG_CFG_RUN", "true") == "true",
-		    Angry: envVarWithDefault("CBNG_CFG_ANGRY", "false") == "true",
-		    ReadOnly: envVarWithDefault("CBNG_CFG_READ_ONLY", "true") == "true",
+			Owner: "NaomiAmethyst",
+			Friends: []string{
+				"ClueBot",
+				"DASHBotAV",
+			},
+			Run:      envVarWithDefault("CBNG_CFG_RUN", "true") == "true",
+			Angry:    envVarWithDefault("CBNG_CFG_ANGRY", "false") == "true",
+			ReadOnly: envVarWithDefault("CBNG_CFG_READ_ONLY", "true") == "true",
 		},
 		Wikipedia: WikipediaConfiguration{
-		    Host: "en.wikipedia.org",
-		    Username: "ClueBot_NG",
-            Password: envVarWithDefault("CBNG_WIKIPEDIA_PASSWORD", ""),
+			Host:     "en.wikipedia.org",
+			Username: "ClueBot_NG",
+			Password: envVarWithDefault("CBNG_WIKIPEDIA_PASSWORD", ""),
 		},
 		Irc: IrcConfiguration{
-		    Server: "irc.libera.chat",
-		    Port: 6697,
-		    Username: envVarWithDefault("CBNG_IRC_USERNAME", "CBNGRelay_Dev"),
-		    Password: os.Getenv("CBNG_IRC_PASSWORD"),
-		    Channel: IrcRelayChannelConfiguration{
-		        Spam: envVarWithDefault("CBNG_IRC_CHANNEL_SPAM", "wikipedia-en-cbngfeed2"),
-		        Revert: envVarWithDefault("CBNG_IRC_CHANNEL_REVERT", "wikipedia-en-cbngrevertfeed2"),
-		        Debug: envVarWithDefault("CBNG_IRC_CHANNEL_DEBUG", "wikipedia-en-cbngdebug2"),
-		    },
+			Server:   "irc.libera.chat",
+			Port:     6697,
+			Username: envVarWithDefault("CBNG_IRC_USERNAME", "CBNGRelay_Dev"),
+			Password: os.Getenv("CBNG_IRC_PASSWORD"),
+			Channel: IrcRelayChannelConfiguration{
+				Revert: envVarWithDefault("CBNG_IRC_CHANNEL_REVERT", "wikipedia-en-cbngrevertfeed2"),
+				Debug:  envVarWithDefault("CBNG_IRC_CHANNEL_DEBUG", "wikipedia-en-cbngdebug2"),
+			},
 		},
 		Sql: SqlInstanceConfiguration{
-		    Replica: []SqlConfiguration{
-                SqlConfiguration{
-                    Username: os.Getenv("TOOL_REPLICA_USER"),
-                    Password: os.Getenv("TOOL_REPLICA_PASSWORD"),
-                    Host: envVarWithDefault("TOOL_REPLICA_HOST", "enwiki.web.db.svc.wikimedia.cloud"),
-                    Port: 3306,
-                    Schema: envVarWithDefault("TOOL_REPLICA_SCHEMA", "enwiki_p"),
-                },
-		    },
-		    Cluebot: SqlConfiguration{
-		        Username: os.Getenv("TOOL_TOOLSDB_USER"),
-		        Password: os.Getenv("TOOL_TOOLSDB_PASSWORD"),
-		        Host: envVarWithDefault("TOOL_TOOLSDB_HOST", "tools-db"),
-		        Port: 3306,
-		        Schema: envVarWithDefault("TOOL_TOOLSDB_SCHEMA", "cluebotng"),
-		    },
+			Replica: []SqlConfiguration{
+				SqlConfiguration{
+					Username: os.Getenv("TOOL_REPLICA_USER"),
+					Password: os.Getenv("TOOL_REPLICA_PASSWORD"),
+					Host:     envVarWithDefault("TOOL_REPLICA_HOST", "enwiki.web.db.svc.wikimedia.cloud"),
+					Port:     3306,
+					Schema:   envVarWithDefault("TOOL_REPLICA_SCHEMA", "enwiki_p"),
+				},
+			},
+			Cluebot: SqlConfiguration{
+				Username: os.Getenv("TOOL_TOOLSDB_USER"),
+				Password: os.Getenv("TOOL_TOOLSDB_PASSWORD"),
+				Host:     envVarWithDefault("TOOL_TOOLSDB_HOST", "tools-db"),
+				Port:     3306,
+				Schema:   envVarWithDefault("TOOL_TOOLSDB_SCHEMA", "cluebotng"),
+			},
 		},
 		Core: CoreConfiguration{
-		    Host: "core",
-		    Port: 3565,
+			Host: "core",
+			Port: 3565,
 		},
 		Honey: HoneyConfiguration{
-		    Key: envVarWithDefault("CBNG_HONEY_KEY", ""),
-		    SampleRate: 0.01,
+			Key:        envVarWithDefault("CBNG_HONEY_KEY", ""),
+			SampleRate: 0.01,
 		},
 	}
 
@@ -171,12 +170,12 @@ func NewConfiguration() *Configuration {
 		configPath = val
 	}
 	if configPath != "" {
-	    logger.Infof("Using configuration file %s", configPath)
+		logger.Infof("Using configuration file %s", configPath)
 		viper.SetConfigFile(configPath)
 
-        if err := viper.ReadInConfig(); err != nil {
-            logger.Fatalf("Error reading config file, %s", err)
-        }
+		if err := viper.ReadInConfig(); err != nil {
+			logger.Fatalf("Error reading config file, %s", err)
+		}
 	}
 
 	err := viper.Unmarshal(&configuration)
