@@ -1,25 +1,14 @@
 name: Release
-on:
-  push: { tags: [ '*' ] }
+on: { push: { tags: [ 'v*' ] } }
 permissions:
   deployments: write
   contents: write
 jobs:
-  release:
+  create-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: cluebotng/ci-create-release@main
         with:
-          go-version: '^1.24'
-      - run: |
-          go build \
-          -ldflags="-X 'github.com/cluebotng/botng/pkg/cbng/config.ReleaseTag=${{ github.ref }}'"
-        env:
-          CGO_ENABLED: 0
-
-      - name: Crease a release
-        uses: ncipollo/release-action@v1
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          artifacts: botng
+          repo_name: '${{ github.repository }}'
+          tag_name: '${{ github.ref }}'
+          gh_app_key: '${{ secrets.CI_RELEASE_MAKER_APP_KEY }}'
