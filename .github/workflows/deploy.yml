@@ -1,18 +1,20 @@
-name: Deploy
-on: { push: { tags: [ 'v*' ] } }
+name: Deploy Tagged Release
+on:
+  release:
+    types:
+      - released
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-        with:
-          repository: cluebotng/utilities
-          ref: main
-
       - uses: cluebotng/ci-update-component-ref@main
         with:
           tool: cluebotng-staging
           component: bot
-          ref: ${{ github.ref }}
+          ref: '${{ inputs.ref || github.ref }}'
           gh_app_key: ${{ secrets.CI_COMPONENT_CONFIGS_APP_KEY }}
-
