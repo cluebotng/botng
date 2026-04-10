@@ -92,7 +92,7 @@ func isVandalism(l *logrus.Entry, parentCtx context.Context, configuration *conf
 	}
 	logger = logger.WithField("request", xmlData)
 
-	coreUrl := fmt.Sprintf("%s:%d", configuration.Core.Host, configuration.Core.Port)
+	coreUrl := net.JoinHostPort(configuration.Core.Host, fmt.Sprintf("%d", configuration.Core.Port))
 	logger.Tracef("Connecting to %v", coreUrl)
 
 	dialer := net.Dialer{Timeout: time.Second * 5}
