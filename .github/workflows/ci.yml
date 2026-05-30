@@ -1,66 +1,69 @@
-name: Continuous Integration
-on:
-  push: { branches: [ main ] }
-  pull_request: { }
-permissions:
-  contents: read
+name: CI
+on: { pull_request: { } }
+concurrency:
+  group: ${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 jobs:
-  build:
+  setup-build:
+    uses: infrabits/ci-setup-tox-env/.github/workflows/setup.yml@main
+
+  execute-lint:
+    needs: [setup-build]
+    uses: infrabits/ci-run-tox-env/.github/workflows/run.yml@main
+    with:
+      environments: ${{ needs.setup-build.outputs.lint }}
+
+  execute-test:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '^1.24'
-      - run: go build
-        env:
-          CGO_ENABLED: 0
-  test:
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    needs: [setup-build]
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.setup-build.outputs.test) }}
     services:
+      selenium:
+        image: ${{ matrix.target == 'test-interactive' && 'selenium/standalone-chrome' || '' }}
+        options: --shm-size=2gb
+
       mysql:
-        image: mysql:9.7
-        env:
-          MYSQL_ROOT_PASSWORD: ''
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-        ports:
-          - '3306:3306'
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '^1.24'
-      - name: Setup MySQL
-        run: |
-          while true;
-          do
-            if [ "$(mysql -h 127.0.0.1 -u root -N -s -e 'select 1' 2> /dev/null)" == "1" ];
-            then
-              break
-            fi
-            sleep 1
-          done
+        image: mariadb
+        env: { "MARIADB_ALLOW_EMPTY_ROOT_PASSWORD": "1" }
+        ports: [3306:3306]
 
-          mysql -h 127.0.0.1 -u root -e 'create database cbng; create database enwiki_p'
+      redis:
+        image: redis
+        ports: [6379:6379]
+    continue-on-error: true
+    steps:
+      - uses: infrabits/ci-setup-mysql@main
+        with:
+          username: cbng_reviewer
+          schemas: test_cbng_reviewer,test_enwiki_p,test_cbng_reviewer_%,test_enwiki_p_%
 
-          mysql -h 127.0.0.1 -u root cbng < cluebot.sql
-          mysql -h 127.0.0.1 -u root enwiki_p < .github/enwiki_p.sql
-      - run: go test
-        env:
-          BOT_CFG: .github/config.yaml
-  vet:
+      - uses: actions/checkout@v6
+
+      - uses: infrabits/ci-setup-python@main
+
+      - uses: infrabits/ci-run-tox-env@main
+        with:
+          environment: ${{ matrix.target }}
+
+  build-container:
     runs-on: ubuntu-latest
+    needs: [setup-build, execute-lint, execute-test]
+    permissions:
+      security-events: write
+      packages: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+
+      - name: Build container
+        uses: infrabits/ci-pack@main
         with:
-          go-version: '^1.24'
-      - run: go vet
-  golangci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '^1.24'
-      - uses: golangci/golangci-lint-action@v9
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          image: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          use_builder: upstream
